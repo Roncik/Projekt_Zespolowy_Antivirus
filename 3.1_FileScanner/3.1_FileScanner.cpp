@@ -1,11 +1,3 @@
-// md5_inmem_lookup.cpp
-// Build: g++ -std=c++17 -O3 md5_inmem_lookup.cpp -o md5_lookup
-//        cl /EHsc /O2 md5_inmem_lookup.cpp /Fe:md5_lookup.exe
-//
-// Usage examples:
-//  1) Single query:  ./md5_lookup virus_hashes.bin d41d8cd98f00b204e9800998ecf8427e
-//  2) Batch (stdin): cat my_hashes.txt | ./md5_lookup virus_hashes.bin -
-//  Each input line should contain a 32-hex MD5 (other whitespace tolerated).
 #include <iostream>
 #include <windows.h>
 #include <vector>
@@ -120,19 +112,6 @@ bool contains_hash(const std::vector<Hash16>& db, const Hash16& q)
 
 int main(int argc, char** argv) 
 {
-    ios::sync_with_stdio(false);
-    cin.tie(nullptr);
-
-    /*if (argc < 3) 
-    {
-        cerr << "Usage: " << argv[0] << " <sorted-16byte-db.bin> <md5-hex | ->\n";
-        cerr << "  Use '-' as second arg to read MD5 hex strings from stdin, one per line.\n";
-        return 1;
-    }*/
-
-    //string dbpath = argv[1];
-    //string qarg = argv[2];
-
     string dbpath = "C:\\Users\\Administrator\\Desktop\\Projekt_Zespolowy_Antivirus\\3.1_FileScanner\\x64\\Release\\merged_hashes.txt"; //VirusShare_00000.md5.txt merged_hashes.txt
     string qarg = "-";
 
