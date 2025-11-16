@@ -5,7 +5,7 @@
 #include <string>
 using namespace std;
 
-static constexpr size_t RECORD_SIZE = 33; //32 hexstring + newline
+static constexpr size_t RECORD_SIZE = 34; //32 hexstring + newline
 
 struct Hash16 
 {
@@ -71,35 +71,85 @@ struct Hash16
     }
 };
 
+//bool load_db_into_memory(const string& path, vector<Hash16>& out)
+//{
+//    ifstream ifs(path); //ios::binary | ios::ate
+//    if (!ifs)
+//    {
+//        cerr << "ERROR: cannot open file: " << path << "\n";
+//        return false;
+//    }
+//
+//    streamsize sz = ifs.tellg();
+//    if (sz < 0)
+//    {
+//        cerr << "ERROR: bad file size\n"; return false;
+//    }
+//
+//
+//
+//
+//    /*
+//    Instead of reading line by line
+//    implement a system that will: cache a large portion of the file into a buffer -> process the data from the buffer -> repeat until all the data is processed
+//    */
+//    
+//    std::string line;
+//    while (std::getline(ifs, line)) 
+//    {
+//        if (line.empty())
+//            continue;
+//        out.push_back(Hash16::from_hexstring(line).second);
+//    }
+//
+//
+//
+//
+//
+//    return true;
+//}
+
 bool load_db_into_memory(const string& path, vector<Hash16>& out)
 {
-    ifstream ifs(path); //ios::binary | ios::ate
+    ifstream ifs(path, ios::binary | ios::ate); //ios::binary | ios::ate
     if (!ifs)
     {
         cerr << "ERROR: cannot open file: " << path << "\n";
         return false;
     }
 
-    streamsize sz = ifs.tellg();
-    if (sz < 0)
+    streamsize fileSize = ifs.tellg();
+    if (fileSize < 0)
     {
         cerr << "ERROR: bad file size\n"; return false;
     }
 
-
-
-
-    /*
-    Instead of reading line by line
-    implement a system that will: cache a large portion of the file into a buffer -> process the data from the buffer -> repeat until all the data is processed
-    */
-    
-    std::string line;
-    while (std::getline(ifs, line)) 
+    size_t numOfEntries = static_cast<size_t>(fileSize / RECORD_SIZE);
+    ifs.seekg(0, ios::beg); //set cursor to 0
+    out.clear();
+    out.reserve(numOfEntries);
+    const size_t BUF_SIZE = RECORD_SIZE*50000; // 1000 entries at a time
+    vector<char> buffer(BUF_SIZE * RECORD_SIZE);
+    size_t remainingEntries = numOfEntries;
+    while (remainingEntries)
     {
-        if (line.empty())
-            continue;
-        out.push_back(Hash16::from_hexstring(line).second);
+        size_t toread_recs = min(remainingEntries, BUF_SIZE);
+        size_t toread = toread_recs * RECORD_SIZE;
+        ifs.read(buffer.data(), (streamsize)toread);
+        if (!ifs) 
+        { 
+            cerr << "ERROR: read failed\n"; 
+            return false; 
+        }
+        for (int i = 0; i < toread_recs; i++)
+        {
+            std::string entry;
+            entry.resize(34);
+            memcpy(entry.data(), buffer.data() + i * RECORD_SIZE, RECORD_SIZE);
+            out.push_back(Hash16::from_hexstring(entry).second);
+        }
+        
+        remainingEntries -= toread_recs;
     }
     return true;
 }
@@ -112,7 +162,7 @@ bool contains_hash(const std::vector<Hash16>& db, const Hash16& q)
 
 int main(int argc, char** argv) 
 {
-    string dbpath = "C:\\Users\\Administrator\\Desktop\\Projekt_Zespolowy_Antivirus\\3.1_FileScanner\\x64\\Release\\merged_hashes.txt"; //VirusShare_00000.md5.txt merged_hashes.txt
+    string dbpath = "C:\\Users\\Administrator\\Desktop\\ProjektZespolowy\\Projekt_Zespolowy_Antivirus\\3.1_FileScanner\\x64\\Release\\merged_hashes.txt"; //VirusShare_00000.md5.txt merged_hashes.txt
     string qarg = "-";
 
     vector<Hash16> db;
