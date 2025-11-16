@@ -71,44 +71,6 @@ struct Hash16
     }
 };
 
-//bool load_db_into_memory(const string& path, vector<Hash16>& out)
-//{
-//    ifstream ifs(path); //ios::binary | ios::ate
-//    if (!ifs)
-//    {
-//        cerr << "ERROR: cannot open file: " << path << "\n";
-//        return false;
-//    }
-//
-//    streamsize sz = ifs.tellg();
-//    if (sz < 0)
-//    {
-//        cerr << "ERROR: bad file size\n"; return false;
-//    }
-//
-//
-//
-//
-//    /*
-//    Instead of reading line by line
-//    implement a system that will: cache a large portion of the file into a buffer -> process the data from the buffer -> repeat until all the data is processed
-//    */
-//    
-//    std::string line;
-//    while (std::getline(ifs, line)) 
-//    {
-//        if (line.empty())
-//            continue;
-//        out.push_back(Hash16::from_hexstring(line).second);
-//    }
-//
-//
-//
-//
-//
-//    return true;
-//}
-
 bool load_db_into_memory(const string& path, vector<Hash16>& out)
 {
     ifstream ifs(path, ios::binary | ios::ate); //ios::binary | ios::ate
@@ -128,7 +90,7 @@ bool load_db_into_memory(const string& path, vector<Hash16>& out)
     ifs.seekg(0, ios::beg); //set cursor to 0
     out.clear();
     out.reserve(numOfEntries);
-    const size_t BUF_SIZE = RECORD_SIZE*50000; // 1000 entries at a time
+    const size_t BUF_SIZE = RECORD_SIZE*50000; // 50000 entries at a time
     vector<char> buffer(BUF_SIZE * RECORD_SIZE);
     size_t remainingEntries = numOfEntries;
     while (remainingEntries)
