@@ -36,7 +36,7 @@ public:
     bool load_db_into_memory(const std::string& path, std::vector<Hash16>& out);
     bool contains_hash(const std::vector<Hash16>& db, const Hash16& q);
 
-    // Compute MD5 for a file at wide path. Returns true on success and fills outHex (lowercase hex).
+    // Compute MD5 for a file at wide path
     bool computeFileMd5(HCRYPTPROV hProv, const std::wstring& wfilePath, Hash16& outHex);
 };
 
