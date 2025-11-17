@@ -1,12 +1,7 @@
 #pragma once
-
-using namespace std;
 class MD5_HashManager
 {
 public:
-
-    static constexpr size_t RECORD_SIZE = 34; //32 hexstring + newline
-
     struct Hash16
     {
         uint64_t hi; // bytes 0..7 as big-endian number
@@ -16,14 +11,14 @@ public:
         static Hash16 from_bytes(const unsigned char* b);
 
         // Parse hex string (may contain whitespace). Return pair(success, Hash16)
-        static pair<bool, Hash16> from_hexstring(const string& s);
-        
+        static std::pair<bool, Hash16> from_hexstring(const std::string& s);
+
 
         bool operator<(const Hash16& o) const noexcept
         {
-            if (hi < o.hi) 
+            if (hi < o.hi)
                 return true;
-            if (hi > o.hi) 
+            if (hi > o.hi)
                 return false;
             return lo < o.lo;
         }
@@ -33,7 +28,15 @@ public:
         }
     };
 
-    bool load_db_into_memory(const string& path, vector<Hash16>& out);
+    static constexpr size_t RECORD_SIZE = 34; //32 hexstring + \r + newline
+    static const DWORD READ_BUFFER_SIZE = 64 * 1024; // 64 KB
+
+    std::vector<Hash16> localHashDatabase;
+
+    bool load_db_into_memory(const std::string& path, std::vector<Hash16>& out);
     bool contains_hash(const std::vector<Hash16>& db, const Hash16& q);
+
+    // Compute MD5 for a file at wide path. Returns true on success and fills outHex (lowercase hex).
+    bool computeFileMd5(HCRYPTPROV hProv, const std::wstring& wfilePath, Hash16& outHex);
 };
 

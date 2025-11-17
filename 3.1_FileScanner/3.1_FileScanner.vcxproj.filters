@@ -24,12 +24,18 @@
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="FileScanner.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MD5_HashManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="pch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FileScanner.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
