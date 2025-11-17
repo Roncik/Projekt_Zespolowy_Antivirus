@@ -57,15 +57,17 @@ void FileScanner::ScanDirectory_MD5(HCRYPTPROV hProv, const std::wstring& startD
                 MD5_HashManager::Hash16 MD5Hash;
                 if (MD5HashMgr.computeFileMd5(hProv, fullPath, MD5Hash)) 
                 {
+                    // convert wide path to UTF-8 for printing
+                    int bufSize = WideCharToMultiByte(CP_UTF8, 0, fullPath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                    std::string pathUtf8(bufSize, '\0');
+                    WideCharToMultiByte(CP_UTF8, 0, fullPath.c_str(), -1, &pathUtf8[0], bufSize, nullptr, nullptr);
+                    if (!pathUtf8.empty() && pathUtf8.back() == '\0') pathUtf8.pop_back();
+                    std::cout << "Now scanning: " << pathUtf8 << std::endl;
+                    
                     if (MD5HashMgr.contains_hash(blacklist, MD5Hash))
                     {
-                        // convert wide path to UTF-8 for printing
-                        int bufSize = WideCharToMultiByte(CP_UTF8, 0, fullPath.c_str(), -1, nullptr, 0, nullptr, nullptr);
-                        std::string pathUtf8(bufSize, '\0');
-                        WideCharToMultiByte(CP_UTF8, 0, fullPath.c_str(), -1, &pathUtf8[0], bufSize, nullptr, nullptr);
-                        if (!pathUtf8.empty() && pathUtf8.back() == '\0') pathUtf8.pop_back();
-
                         std::cout << "[BLACKLIST MATCH] " << "  ->  " << pathUtf8 << std::endl;
+                        Sleep(3000);
                     }
                 }
                 else
@@ -82,7 +84,7 @@ void FileScanner::ScanDirectory_MD5(HCRYPTPROV hProv, const std::wstring& startD
 
 void FileScanner::ScanAllDirectories_MD5()
 {
-    if (MD5HashBlacklist.empty())
+    if (this->MD5HashBlacklist.empty())
     {
         std::cerr << "MD5 blacklist is empty. Scan aborted" << std::endl;
         return;
