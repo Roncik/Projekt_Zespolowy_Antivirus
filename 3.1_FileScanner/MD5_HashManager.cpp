@@ -67,11 +67,11 @@ bool MD5_HashManager::load_db_into_memory(const string& path, vector<Hash16>& ou
     out.clear();
     out.reserve(numOfEntries);
     const size_t BUF_SIZE = RECORD_SIZE * 50000; // 50000 entries at a time
-    vector<char> buffer(BUF_SIZE * RECORD_SIZE);
+    vector<char> buffer(BUF_SIZE);
     size_t remainingEntries = numOfEntries;
     while (remainingEntries)
     {
-        size_t toread_recs = min(remainingEntries, BUF_SIZE);
+        size_t toread_recs = min(remainingEntries, BUF_SIZE / RECORD_SIZE);
         size_t toread = toread_recs * RECORD_SIZE;
         ifs.read(buffer.data(), (streamsize)toread);
         if (!ifs)
