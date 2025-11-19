@@ -81,8 +81,7 @@ bool MD5_HashManager::load_db_into_memory(const string& path, vector<Hash16>& ou
         }
         for (int i = 0; i < toread_recs; i++)
         {
-            std::string entry;
-            entry.resize(34);
+            std::string entry(RECORD_SIZE, '\0');
             memcpy(entry.data(), buffer.data() + i * RECORD_SIZE, RECORD_SIZE);
             out.push_back(Hash16::from_hexstring(entry).second);
         }
