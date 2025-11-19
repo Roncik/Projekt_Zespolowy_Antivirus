@@ -97,7 +97,7 @@ bool MD5_HashManager::contains_hash(const std::vector<Hash16>& db, const Hash16&
     return (std::find(db.begin(), db.end(), q) != db.end());
 }
 
-// Compute MD5 for a file at wide path. Returns true on success and fills outHex (lowercase hex).
+// Compute MD5 for a file at wide path.
 bool MD5_HashManager::computeFileMd5(HCRYPTPROV hProv, const std::wstring& wfilePath, MD5_HashManager::Hash16& outHex) 
 {
     HCRYPTPROV prov = hProv;
