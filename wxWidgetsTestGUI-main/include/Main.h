@@ -1,7 +1,8 @@
-
+#pragma once
 #include <wx/wx.h>
 #include <wx/panel.h>
 #include <wx/wxprec.h>
+#include "Panels.h"
 
 class MyApp : public wxApp
 {
@@ -9,37 +10,25 @@ public:
     bool OnInit() override;
 };
 
+// menubar item
 enum
 {
     ID_Hello = 1
 };
 
-class LeftPanel : public wxPanel
+// declared here cause class reference variables
+class MyFrame : public wxFrame
 {
 public:
-    LeftPanel(wxPanel* parent);
+    MyFrame();
+    RightPanel* GetM_RP();
+     
+private:
+    void OnHello(wxCommandEvent& event);
+    void OnExit(wxCommandEvent& event);
+    void OnAbout(wxCommandEvent& event);
 
-    void OnPlus(wxCommandEvent& event);
-    void OnMinus(wxCommandEvent& event);
-
-    wxButton* m_plus;
-    wxButton* m_minus;
+    LeftPanel* m_lp;
+    RightPanel* m_rp;
     wxPanel* m_parent;
-    int count;
-    wxStaticText* m_text;
-
 };
-
-class RightPanel : public wxPanel
-{
-public:
-    RightPanel(wxPanel* parent);
-
-    void OnSetText(wxCommandEvent& event);
-
-    wxStaticText* m_text;
-
-};
-
-const int ID_PLUS = 101;
-const int ID_MINUS = 102;
