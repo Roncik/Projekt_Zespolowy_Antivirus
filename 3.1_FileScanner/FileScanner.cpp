@@ -1,14 +1,14 @@
 #include "pch.h"
 #include "FileScanner.h"
 
-void FileScanner::ScanDirectory_MD5(HCRYPTPROV hProv, const std::wstring& startDir, const std::vector<MD5_HashManager::Hash16>& blacklist)
+void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const std::wstring& startDir, const std::vector<MD5_HashManager::Hash16>& blacklist)
 {
     if (blacklist.empty())
     {
         std::cerr << "MD5 blacklist is empty. Scan aborted" << std::endl;
         return;
     }
-    
+
     std::vector<std::wstring> stack;
     stack.push_back(startDir);
 
@@ -55,7 +55,7 @@ void FileScanner::ScanDirectory_MD5(HCRYPTPROV hProv, const std::wstring& startD
             {
                 // compute MD5 and check blacklist
                 MD5_HashManager::Hash16 MD5Hash;
-                if (MD5HashMgr.computeFileMd5(hProv, fullPath, MD5Hash)) 
+                if (MD5HashMgr.computeFileMd5(hProv, fullPath, MD5Hash))
                 {
                     // convert wide path to UTF-8 for printing
                     int bufSize = WideCharToMultiByte(CP_UTF8, 0, fullPath.c_str(), -1, nullptr, 0, nullptr, nullptr);
@@ -63,7 +63,7 @@ void FileScanner::ScanDirectory_MD5(HCRYPTPROV hProv, const std::wstring& startD
                     WideCharToMultiByte(CP_UTF8, 0, fullPath.c_str(), -1, &pathUtf8[0], bufSize, nullptr, nullptr);
                     if (!pathUtf8.empty() && pathUtf8.back() == '\0') pathUtf8.pop_back();
                     std::cout << "Now scanning: " << pathUtf8 << std::endl;
-                    
+
                     if (MD5HashMgr.contains_hash(blacklist, MD5Hash))
                     {
                         std::cout << "[BLACKLIST MATCH] " << "  ->  " << pathUtf8 << std::endl;
@@ -89,7 +89,7 @@ void FileScanner::ScanAllDirectories_MD5()
         std::cerr << "MD5 blacklist is empty. Scan aborted" << std::endl;
         return;
     }
-    
+
     // Acquire crypto provider (use CRYPT_VERIFYCONTEXT since we only do hashing)
     HCRYPTPROV hProv = 0;
     if (!CryptAcquireContextW(&hProv, nullptr, nullptr, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
@@ -120,7 +120,7 @@ void FileScanner::ScanAllDirectories_MD5()
         {
             try
             {
-                ScanDirectory_MD5(hProv, std::wstring(driveRoot), MD5HashBlacklist);
+                ScanDirectoryAndAllSubdirectories_MD5(hProv, std::wstring(driveRoot), MD5HashBlacklist);
             }
             catch (...)
             {

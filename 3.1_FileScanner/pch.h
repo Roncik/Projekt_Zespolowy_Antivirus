@@ -10,6 +10,9 @@
 #include <unordered_set>
 #include <sstream>
 #include <iomanip>
+#include <thread>
+#include <mutex>
+#include <algorithm>
 
 #pragma comment(lib, "advapi32.lib")
 
