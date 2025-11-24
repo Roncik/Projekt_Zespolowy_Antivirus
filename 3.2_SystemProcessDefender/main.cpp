@@ -12,7 +12,7 @@ int wmain()
     spd.GetSystem32Processes(systemProcesses, system32NonSystemUsers);
 
 
-    // 3) Output results
+    // Output results
     std::wcout << L"--- Found system processes (user = NT AUTHORITY || SYSTEM) ---\n";
     if (systemProcesses.empty())
     {
