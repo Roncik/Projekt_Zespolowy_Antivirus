@@ -140,10 +140,16 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="PrivilegeManager.cpp" />
+    <ClCompile Include="ProcessManager.cpp" />
+    <ClCompile Include="SignatureManager.cpp" />
     <ClCompile Include="SystemProcessDefender.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
+    <ClInclude Include="PrivilegeManager.h" />
+    <ClInclude Include="ProcessManager.h" />
+    <ClInclude Include="SignatureManager.h" />
     <ClInclude Include="SystemProcessDefender.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -11,6 +11,8 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <iomanip>
+#include <sstream>
 
 #pragma comment(lib, "Advapi32.lib")
 #pragma comment(lib, "Psapi.lib")

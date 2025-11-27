@@ -28,83 +28,6 @@ bool SystemProcessDefender::VerifyEmbeddedSignature(const std::wstring& filePath
     return (status == ERROR_SUCCESS);
 }
 
-bool SystemProcessDefender::GetProcessImagePath(DWORD pid, std::wstring& outPath)
-{
-    outPath.clear();
-    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (!hProc) return false;
-
-    DWORD capacity = 32768; // ample buffer
-    std::vector<wchar_t> buffer(capacity);
-    DWORD size = capacity;
-    if (QueryFullProcessImageNameW(hProc, 0, buffer.data(), &size))
-    {
-        outPath.assign(buffer.data(), size);
-        CloseHandle(hProc);
-        return true;
-    }
-    else
-    {
-        CloseHandle(hProc);
-        return false;
-    }
-}
-
-bool SystemProcessDefender::GetProcessOwner(DWORD pid, std::wstring& outDomain, std::wstring& outUser)
-{
-    outDomain.clear();
-    outUser.clear();
-
-    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (!hProc) return false;
-
-    HANDLE hToken = NULL;
-    if (!OpenProcessToken(hProc, TOKEN_QUERY, &hToken))
-    {
-        CloseHandle(hProc);
-        return false;
-    }
-
-    DWORD tokenInfoLen = 0;
-    GetTokenInformation(hToken, TokenUser, NULL, 0, &tokenInfoLen);
-    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-    {
-        CloseHandle(hToken);
-        CloseHandle(hProc);
-        return false;
-    }
-
-    std::vector<BYTE> tokenInfoBuf(tokenInfoLen);
-    if (!GetTokenInformation(hToken, TokenUser, tokenInfoBuf.data(), tokenInfoLen, &tokenInfoLen))
-    {
-        CloseHandle(hToken);
-        CloseHandle(hProc);
-        return false;
-    }
-
-    TOKEN_USER* tokenUser = reinterpret_cast<TOKEN_USER*>(tokenInfoBuf.data());
-    SID* pSid = reinterpret_cast<SID*>(tokenUser->User.Sid);
-
-    wchar_t name[512];
-    wchar_t domain[512];
-    DWORD nameLen = _countof(name);
-    DWORD domainLen = _countof(domain);
-    SID_NAME_USE snu;
-    if (!LookupAccountSidW(NULL, pSid, name, &nameLen, domain, &domainLen, &snu))
-    {
-        CloseHandle(hToken);
-        CloseHandle(hProc);
-        return false;
-    }
-
-    outUser.assign(name, nameLen);
-    outDomain.assign(domain, domainLen);
-
-    CloseHandle(hToken);
-    CloseHandle(hProc);
-    return true;
-}
-
 void SystemProcessDefender::GetSystem32Processes(std::vector<SystemProcessDefender::ProcessInfo>& systemProcesses, std::vector<SystemProcessDefender::ProcessInfo>& nonSystemSystem32Processes)
 {
     // prepare windows system32 path for comparisons
@@ -141,10 +64,10 @@ void SystemProcessDefender::GetSystem32Processes(std::vector<SystemProcessDefend
                 continue; // skip idle
 
             std::wstring path;
-            bool gotPath = GetProcessImagePath(pid, path);
+            bool gotPath = this->processManager.GetProcessImagePath(pid, path);
 
             std::wstring domain, user;
-            bool gotOwner = GetProcessOwner(pid, domain, user);
+            bool gotOwner = this->processManager.GetProcessOwner(pid, domain, user);
 
             // normalize domain and user to upper/lower for comparisons
             std::wstring domainUpper = domain;
@@ -185,4 +108,374 @@ void SystemProcessDefender::GetSystem32Processes(std::vector<SystemProcessDefend
         } while (Process32NextW(hSnap, &pe));
     }
     CloseHandle(hSnap);
+}
+
+// Compare executable sections in-memory vs on-disk main module
+bool SystemProcessDefender::CompareImageSectionsWithDisk(DWORD pid, std::vector<SectionMismatch>& outMismatches, std::wstring& outMainModulePath)
+{
+    outMismatches.clear();
+    outMainModulePath.clear();
+
+    // get main module base & path
+    uintptr_t base = 0;
+    if (!this->processManager.GetMainModuleBase(pid, base, outMainModulePath))
+        return false;
+
+    // map file on disk
+    HANDLE handleFile = CreateFileW(outMainModulePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (handleFile == INVALID_HANDLE_VALUE) 
+        return false;
+    HANDLE handleFileMapping = CreateFileMappingW(handleFile, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (!handleFileMapping) 
+    { 
+        CloseHandle(handleFile); 
+        return false; 
+    }
+    LPVOID mapView = MapViewOfFile(handleFileMapping, FILE_MAP_READ, 0, 0, 0);
+    if (!mapView) 
+    { 
+        CloseHandle(handleFileMapping); 
+        CloseHandle(handleFile); 
+        return false; 
+    }
+
+    // parse PE headers on disk
+    BYTE* fileBase = (BYTE*)mapView;
+    IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)fileBase;
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE) 
+    { 
+        UnmapViewOfFile(mapView); 
+        CloseHandle(handleFileMapping); 
+        CloseHandle(handleFile); 
+        return false; 
+    }
+    IMAGE_NT_HEADERS* nt = (IMAGE_NT_HEADERS*)(fileBase + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE) 
+    { 
+        UnmapViewOfFile(mapView); 
+        CloseHandle(handleFileMapping); 
+        CloseHandle(handleFile); 
+        return false; 
+    }
+
+    WORD numberOfSections = nt->FileHeader.NumberOfSections;
+    IMAGE_SECTION_HEADER* sections = IMAGE_FIRST_SECTION(nt);
+
+    // open process for reading
+    HANDLE handleProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, pid);
+    if (!handleProcess) 
+    { 
+        UnmapViewOfFile(mapView); 
+        CloseHandle(handleFileMapping); 
+        CloseHandle(handleFile); 
+        return false; 
+    }
+
+    // iterate sections; we compare sections marked executable (or CODE) and non-zero SizeOfRawData
+    for (WORD i = 0; i < numberOfSections; ++i)
+    {
+        IMAGE_SECTION_HEADER& sectionHeader = sections[i];
+        DWORD characteristics = sectionHeader.Characteristics;
+        bool isExecutable = (characteristics & IMAGE_SCN_MEM_EXECUTE) || (characteristics & IMAGE_SCN_CNT_CODE);
+        if (!isExecutable) 
+            continue;
+
+        SIZE_T virtualSize = std::max<ULONG>(sectionHeader.Misc.VirtualSize, sectionHeader.SizeOfRawData);
+        if (virtualSize == 0) 
+            continue;
+
+        uintptr_t remoteAddr = base + sectionHeader.VirtualAddress;
+        std::vector<BYTE> remoteBuf(virtualSize);
+        SIZE_T bytesRead = 0;
+        if (!ReadProcessMemory(handleProcess, (LPCVOID)remoteAddr, remoteBuf.data(), virtualSize, &bytesRead))
+        {
+            // cannot read region - record as mismatch (or note we couldn't read)
+            SectionMismatch m;
+            m.sectionName.resize(IMAGE_SIZEOF_SHORT_NAME);
+            MultiByteToWideChar(CP_UTF8, 0, (char*)sectionHeader.Name, IMAGE_SIZEOF_SHORT_NAME, m.sectionName.data(), IMAGE_SIZEOF_SHORT_NAME);
+            m.offsetInSection = 0;
+            m.length = 0;
+            outMismatches.push_back(std::move(m));
+            continue;
+        }
+
+        // get corresponding on-disk bytes
+        SIZE_T onDiskSize = sectionHeader.SizeOfRawData;
+        if (onDiskSize == 0) onDiskSize = virtualSize;
+        BYTE* onDiskPtr = fileBase + sectionHeader.PointerToRawData;
+
+        // compare byte-by-byte; find contiguous mismatches
+        SIZE_T pos = 0;
+        while (pos < virtualSize)
+        {
+            if (pos >= onDiskSize) 
+            {
+                // beyond raw data -> treat as mismatch
+                SectionMismatch sectionMismatch;
+                sectionMismatch.sectionName.resize(IMAGE_SIZEOF_SHORT_NAME);
+                MultiByteToWideChar(CP_UTF8, 0, (char*)sectionHeader.Name, IMAGE_SIZEOF_SHORT_NAME, sectionMismatch.sectionName.data(), IMAGE_SIZEOF_SHORT_NAME);
+                sectionMismatch.offsetInSection = pos;
+                sectionMismatch.length = virtualSize - pos;
+                // capture small sample
+                SIZE_T sample = std::min<SIZE_T>(64, virtualSize - pos);
+                sectionMismatch.expected.assign(onDiskPtr + pos, onDiskPtr + pos + std::min<SIZE_T>(sample, onDiskSize > pos ? sample : 0));
+                sectionMismatch.actual.assign(remoteBuf.begin() + pos, remoteBuf.begin() + pos + sample);
+                outMismatches.push_back(std::move(sectionMismatch));
+                break;
+            }
+
+            if (remoteBuf[pos] != onDiskPtr[pos])
+            {
+                SIZE_T start = pos;
+                SIZE_T len = 1;
+                ++pos;
+                while (pos < virtualSize && pos < onDiskSize && remoteBuf[pos] != onDiskPtr[pos])
+                { 
+                    ++pos; 
+                    ++len; 
+                }
+
+                /*
+                We skip mismatches that are under 14 bytes.
+                Minimal size for a trivial code hook is 14 bytes.
+                Hooks can still be achievied with < 14 byte patches but are far harder to implement so we skip.
+                */
+                if (len < this->MINIMAL_REPORTED_MISMATCH_SIZE) 
+                    continue;
+
+                SectionMismatch sectionMismatch;
+                sectionMismatch.sectionName.resize(IMAGE_SIZEOF_SHORT_NAME);
+                MultiByteToWideChar(CP_UTF8, 0, (char*)sectionHeader.Name, IMAGE_SIZEOF_SHORT_NAME, sectionMismatch.sectionName.data(), IMAGE_SIZEOF_SHORT_NAME);
+                sectionMismatch.offsetInSection = start;
+                sectionMismatch.length = len;
+                SIZE_T sample = std::min<SIZE_T>(64, len);
+                sectionMismatch.expected.assign(onDiskPtr + start, onDiskPtr + start + std::min<SIZE_T>(sample, onDiskSize - start));
+                sectionMismatch.actual.assign(remoteBuf.begin() + start, remoteBuf.begin() + start + sample);
+                outMismatches.push_back(std::move(sectionMismatch));
+            }
+            else 
+                ++pos;
+        }
+    }
+
+    CloseHandle(handleProcess);
+    UnmapViewOfFile(mapView);
+    CloseHandle(handleFileMapping);
+    CloseHandle(handleFile);
+    return true;
+}
+
+// Scan memory for list of signatures (vector of pair(hexPattern, name)) hexPattern - ascii hex bytes, spaces allowed, '?' wildcard allowed
+/*
+Example signature:
+
+std::string sig = "48 8B 0D ? ? ? ? 89 C0 48 8B ? ? 48 ? ? ? ? 48 8B";
+std::wstring name = L"exampleSignature";
+std::pair<std::string, std::wstring> examplePair(sig, name);
+*/
+bool SystemProcessDefender::ScanExecutableMemoryForSignatures(DWORD pid, const std::vector<std::pair<std::string, std::wstring>>& signatures, std::vector<SignatureHit>& outHits)
+{
+
+    
+    outHits.clear();
+    HANDLE handleProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, pid);
+    if (!handleProcess) 
+        return false;
+
+    // iterate address space via VirtualQueryEx
+    SYSTEM_INFO systemInfo; GetSystemInfo(&systemInfo);
+    uintptr_t currentMemoryRegionAddress = (uintptr_t)systemInfo.lpMinimumApplicationAddress;
+    MEMORY_BASIC_INFORMATION memoryBasicInformation;
+    while (currentMemoryRegionAddress < (uintptr_t)systemInfo.lpMaximumApplicationAddress)
+    {
+        if (VirtualQueryEx(handleProcess, (LPCVOID)currentMemoryRegionAddress, &memoryBasicInformation, sizeof(memoryBasicInformation)) == 0) 
+            break;
+        if (memoryBasicInformation.State == MEM_COMMIT)
+        {
+            // choose readable and executable regions
+            bool readable_and_executable = false;
+            if (memoryBasicInformation.Protect & PAGE_EXECUTE_READ || memoryBasicInformation.Protect & PAGE_EXECUTE_READWRITE)
+                readable_and_executable = true;
+
+            if (readable_and_executable)
+            {
+                SIZE_T regionSize = memoryBasicInformation.RegionSize;
+                std::vector<BYTE> buf(regionSize);
+                SIZE_T bytesRead = 0;
+                if (ReadProcessMemory(handleProcess, memoryBasicInformation.BaseAddress, buf.data(), regionSize, &bytesRead))
+                {
+                    // for each signature pattern
+                    for (auto& signature : signatures)
+                    {
+                        std::vector<BYTE> pattern;
+                        std::string mask;
+                        this->signatureManager.ParseHexPattern(signature.first, pattern, mask);
+                        if (pattern.empty()) 
+                            continue;
+                        // search in buffer
+                        uintptr_t foundOffset = this->signatureManager.FindPattern(buf.data(), bytesRead, pattern, mask);
+                        if (foundOffset != 0 || (foundOffset == 0 && bytesRead >= pattern.size() && memcmp(buf.data(), pattern.data(), pattern.size()) == 0))
+                        {
+                            // If pattern found multiple times in region, we only report first
+                            uintptr_t absolute = (uintptr_t)memoryBasicInformation.BaseAddress + foundOffset;
+                            SignatureHit hit;
+                            hit.name = signature.second;
+                            hit.address = (PVOID)absolute;
+                            outHits.push_back(hit);
+                        }
+                    }
+                }
+            }
+        }
+        currentMemoryRegionAddress = (uintptr_t)memoryBasicInformation.BaseAddress + memoryBasicInformation.RegionSize;
+    }
+
+    CloseHandle(handleProcess);
+    return true;
+}
+
+// Check each thread's current instruction pointer and verify it's inside an executable section of main module.
+// Returns threads where instruction pointer is outside original executable sections (suspicious)
+bool SystemProcessDefender::CheckThreadsExecution(DWORD pid, std::vector<ThreadSuspicious>& outSuspiciousThreads)
+{
+    outSuspiciousThreads.clear();
+
+    // first get main module executable sections and address range
+    uintptr_t base = 0;
+    std::wstring mainPath;
+    if (!this->processManager.GetMainModuleBase(pid, base, mainPath)) 
+        return false;
+
+    // parse module's sections on-disk to gather executable ranges (filemapping technique)
+    HANDLE handleFile = CreateFileW(mainPath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (handleFile == INVALID_HANDLE_VALUE) 
+        return false;
+
+    HANDLE handleFileMapping = CreateFileMappingW(handleFile, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (!handleFileMapping) 
+    { 
+        CloseHandle(handleFile); 
+        return false; 
+    }
+
+    LPVOID mapView = MapViewOfFile(handleFileMapping, FILE_MAP_READ, 0, 0, 0);
+    if (!mapView) 
+    { 
+        CloseHandle(handleFileMapping); 
+        CloseHandle(handleFile); 
+        return false; 
+    }
+
+    BYTE* fileBase = (BYTE*)mapView;
+    IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)fileBase;
+    IMAGE_NT_HEADERS* nt = (IMAGE_NT_HEADERS*)(fileBase + dos->e_lfanew);
+    IMAGE_SECTION_HEADER* sections = IMAGE_FIRST_SECTION(nt);
+    std::vector<std::pair<uintptr_t, uintptr_t>> executableRanges; // <start, end>
+    for (WORD i = 0; i < nt->FileHeader.NumberOfSections; ++i)
+    {
+        IMAGE_SECTION_HEADER& sectionHeader = sections[i];
+        if (sectionHeader.Characteristics & IMAGE_SCN_MEM_EXECUTE || sectionHeader.Characteristics & IMAGE_SCN_CNT_CODE)
+        {
+            uintptr_t start = base + sectionHeader.VirtualAddress;
+            uintptr_t end = start + std::max<ULONG>(sectionHeader.Misc.VirtualSize, sectionHeader.SizeOfRawData);
+            executableRanges.emplace_back(start, end);
+        }
+    }
+
+    UnmapViewOfFile(mapView);
+    CloseHandle(handleFileMapping);
+    CloseHandle(handleFile);
+
+    // enumerate threads of process
+    HANDLE hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (hsnap == INVALID_HANDLE_VALUE) 
+        return false;
+    THREADENTRY32 te;
+    te.dwSize = sizeof(te);
+    if (!Thread32First(hsnap, &te))
+    {
+        CloseHandle(hsnap);
+        return false;
+    }
+
+    // for each thread belonging to pid, open and suspend to read context
+    do
+    {
+        if (te.th32OwnerProcessID != pid) 
+            continue;
+        DWORD tid = te.th32ThreadID;
+        HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid);
+        if (!hThread) 
+            continue;
+        // suspend
+        if (SuspendThread(hThread) == (DWORD)-1)
+        {
+            CloseHandle(hThread);
+            continue;
+        }
+
+
+        /*
+        Based on the architecture we either work with 32bit or 64bit registers
+        alongside fundamental architectural differences
+        *THIS PROJECTS IS EXPECTED TO BE COMPATIBLE ONLY WITH X86(64bit&32bit) ARCHITECTURE*
+        */
+        CONTEXT ctx;
+#ifdef _M_X64
+        RtlZeroMemory(&ctx, sizeof(ctx));
+        ctx.ContextFlags = CONTEXT_CONTROL;
+        if (GetThreadContext(hThread, &ctx))
+        {
+            uintptr_t instructionPointer = (uintptr_t)ctx.Rip; //RIP = pointer to next instruction to be executed
+            bool inside = false;
+            for (auto& executableRange : executableRanges) 
+            { 
+                if (instructionPointer >= executableRange.first && instructionPointer < executableRange.second) 
+                { 
+                    inside = true; 
+                    break; 
+                } 
+            }
+            if (!inside)
+            {
+                ThreadSuspicious ts; 
+                ts.threadID = tid; 
+                ts.instructionPointer = instructionPointer; 
+                ts.instructionPointerInsideExecutableSection = false;
+                outSuspiciousThreads.push_back(ts);
+            }
+        }
+#else
+        RtlZeroMemory(&ctx, sizeof(ctx));
+        ctx.ContextFlags = CONTEXT_CONTROL;
+        if (GetThreadContext(hThread, &ctx))
+        {
+            uintptr_t ip = (uintptr_t)ctx.Eip; //EIP = pointer to next instruction to be executed
+            bool inside = false;
+            for (auto& r : execRanges) 
+            { 
+                if (ip >= r.first && ip < r.second) 
+                { 
+                    inside = true; 
+                    break; 
+                } 
+            }
+            if (!inside)
+            {
+                ThreadSuspicious ts; 
+                ts.tid = tid; 
+                ts.ip = ip; 
+                ts.ipInsideExecutableSection = false;
+                outSuspiciousThreads.push_back(ts);
+            }
+        }
+#endif
+
+        ResumeThread(hThread);
+        CloseHandle(hThread);
+
+    } while (Thread32Next(hsnap, &te));
+    CloseHandle(hsnap);
+
+    return true;
 }
