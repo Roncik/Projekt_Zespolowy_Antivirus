@@ -236,9 +236,9 @@ bool SystemProcessDefender::CompareImageSectionsWithDisk(DWORD pid, std::vector<
                 }
 
                 /*
-                We skip mismatches that are under 14 bytes.
-                Minimal size for a trivial code hook is 14 bytes.
-                Hooks can still be achievied with < 14 byte patches but are far harder to implement so we skip.
+                We skip mismatches that are under 12 bytes.
+                Minimal size for a trivial code hook is 12 bytes.
+                Hooks can still be achievied with < 12 byte patches but are far harder to implement so we skip.
                 */
                 if (len < this->MINIMAL_REPORTED_MISMATCH_SIZE) 
                     continue;
