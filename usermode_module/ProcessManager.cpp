@@ -98,3 +98,70 @@ bool ProcessManager::GetProcessOwner(DWORD pid, std::wstring& outDomain, std::ws
     CloseHandle(hProc);
     return true;
 }
+
+std::wstring ProcessManager::DevicePathToDosPath(const std::wstring& devicePath)
+{
+    if (devicePath.empty()) return {};
+
+    DWORD len = GetLogicalDriveStringsW(0, NULL);
+    if (len == 0) return devicePath;
+    std::vector<wchar_t> buf(len + 1);
+    GetLogicalDriveStringsW(len + 1, buf.data());
+
+    wchar_t drive[4] = { 0 };
+    wchar_t deviceName[MAX_PATH] = { 0 };
+
+    wchar_t* p = buf.data();
+    while (*p)
+    {
+        // p points to "C:\\"
+        drive[0] = p[0];
+        drive[1] = L':';
+        drive[2] = L'\0';
+        if (QueryDosDeviceW(drive, deviceName, MAX_PATH))
+        {
+            std::wstring devName(deviceName);
+            // if devicePath starts with devName, replace it with drive letter
+            if (_wcsnicmp(devicePath.c_str(), devName.c_str(), devName.length()) == 0)
+            {
+                std::wstring rest = devicePath.substr(devName.length());
+                std::wstring result = std::wstring(drive) + rest;
+                return result;
+            }
+        }
+        // advance to next drive string
+        while (*p) ++p;
+        ++p;
+    }
+    return devicePath; // fallback
+}
+
+bool ProcessManager::IsExecuteProtection(DWORD prot)
+{
+    // mask out guard/no-cache flags to get base protection
+    DWORD base = prot & 0xFF;
+    switch (base)
+    {
+    case PAGE_EXECUTE:
+    case PAGE_EXECUTE_READ:
+    case PAGE_EXECUTE_READWRITE:
+    case PAGE_EXECUTE_WRITECOPY:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool ProcessManager::IsWritableExecutable(DWORD prot)
+{
+    // mask out guard/no-cache flags to get base protection
+    DWORD base = prot & 0xFF;
+    switch (base)
+    {
+    case PAGE_EXECUTE_READWRITE:
+    case PAGE_EXECUTE_WRITECOPY: // copy-on-write also podejrzane
+        return true;
+    default:
+        return false;
+    }
+}

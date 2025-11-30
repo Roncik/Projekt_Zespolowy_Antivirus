@@ -40,6 +40,16 @@ public:
         bool instructionPointerInsideExecutableSection;
     };
 
+    struct SuspiciousAllocation
+    {
+        LPVOID baseAddress;
+        SIZE_T regionSize;
+        DWORD protect;   
+        DWORD type;      // MEM_PRIVATE / MEM_MAPPED / MEM_IMAGE
+        std::wstring mappedFile; // possible mapped file (if any), empty if unknown
+        bool writableExecutable; // true if RW + EXEC
+    };
+
 
     static const SIZE_T MINIMAL_REPORTED_MISMATCH_SIZE = 12;
 
@@ -53,5 +63,7 @@ public:
     bool ScanExecutableMemoryForSignatures(DWORD pid, const std::vector<std::pair<std::string, std::wstring>>& signatures, std::vector<SignatureHit>& outHits);
 
     bool CheckThreadsExecution(DWORD pid, std::vector<ThreadSuspicious>& outSuspiciousThreads);
+
+    bool FindSuspiciousExecutableAllocations(DWORD pid, std::vector<SuspiciousAllocation>& outAllocs);
 };
 

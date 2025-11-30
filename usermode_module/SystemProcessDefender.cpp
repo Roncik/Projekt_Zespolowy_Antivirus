@@ -478,3 +478,69 @@ bool SystemProcessDefender::CheckThreadsExecution(DWORD pid, std::vector<ThreadS
 
     return true;
 }
+
+bool SystemProcessDefender::FindSuspiciousExecutableAllocations(DWORD pid, std::vector<SuspiciousAllocation>& outAllocs)
+{
+    outAllocs.clear();
+
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    if (!hProc)
+    {
+        return false;
+    }
+
+    SYSTEM_INFO systemInfo;
+    GetSystemInfo(&systemInfo);
+    uintptr_t addr = (uintptr_t)systemInfo.lpMinimumApplicationAddress;
+    uintptr_t maxAddr = (uintptr_t)systemInfo.lpMaximumApplicationAddress;
+
+    MEMORY_BASIC_INFORMATION memoryBasicInformation;
+    while (addr < maxAddr)
+    {
+        SIZE_T q = VirtualQueryEx(hProc, (LPCVOID)addr, &memoryBasicInformation, sizeof(memoryBasicInformation));
+        if (q == 0)
+        {
+            // if VirtualQueryEx fails, we increment by page size to avoid infinite loop
+            addr += 0x1000;
+            continue;
+        }
+
+        // only 'commited' memory regions are checked
+        if (memoryBasicInformation.State == MEM_COMMIT)
+        {
+            // MEM_PRIVATE (VirtualAlloc/VirtualAllocEx) or MEM_MAPPED (NtMapViewOfSection)
+            if (memoryBasicInformation.Type == MEM_PRIVATE || memoryBasicInformation.Type == MEM_MAPPED)
+            {
+                if (this->processManager.IsExecuteProtection(memoryBasicInformation.Protect))
+                {
+                    SuspiciousAllocation s;
+                    s.baseAddress = memoryBasicInformation.BaseAddress;
+                    s.regionSize = memoryBasicInformation.RegionSize;
+                    s.protect = memoryBasicInformation.Protect;
+                    s.type = memoryBasicInformation.Type;
+                    s.mappedFile.clear();
+                    s.writableExecutable = this->processManager.IsWritableExecutable(memoryBasicInformation.Protect);
+
+                    // the memory could also be a mapped file or shared memory.
+                    // try to get the potential mapped file's path and convert it to DOS path
+                    wchar_t mapped[MAX_PATH] = { 0 };
+                    if (GetMappedFileNameW(hProc, memoryBasicInformation.BaseAddress, mapped, _countof(mapped)))
+                    {
+                        std::wstring device(mapped);
+                        std::wstring dos = this->processManager.DevicePathToDosPath(device);
+                        s.mappedFile = dos;
+                    }
+
+
+                    outAllocs.push_back(std::move(s));
+                }
+            }
+        }
+
+        // advance to next region
+        addr = (uintptr_t)memoryBasicInformation.BaseAddress + memoryBasicInformation.RegionSize;
+    }
+
+    CloseHandle(hProc);
+    return true;
+}

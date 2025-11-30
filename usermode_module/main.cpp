@@ -27,6 +27,14 @@ int main()
         for (auto& sectionMismatch : sectionMismatches)
         {
             std::wcout << L"Mismatch in section: " << sectionMismatch.sectionName << L". Length: " << sectionMismatch.length << L"\n";
+            std::wcout << L"Expected bytes:";
+            for (auto& originalByte : sectionMismatch.expected)
+                std::wcout << L" " << originalByte;
+            std::wcout << L"\n";
+            std::wcout << L"Actual bytes:";
+            for (auto& changedByte : sectionMismatch.actual)
+                std::wcout << L" " << changedByte;
+            std::wcout << L"\n";
         }
     }*/
 
@@ -54,7 +62,7 @@ int main()
     }*/
 
     //Scan System32 processes for execution outside of original executable memory ranges
-    SystemProcessDefender spd;
+    /*SystemProcessDefender spd;
 
     std::vector<SystemProcessDefender::ProcessInfo> systemProcesses;
     std::vector<SystemProcessDefender::ProcessInfo> system32NonSystemUsers;
@@ -72,9 +80,42 @@ int main()
         {
             std::wcout << L"Suspicious thread found in thread: " << suspiciousThread.threadID << L". IP: " << suspiciousThread.instructionPointer << L"\n";
         }
+    }*/
+
+    //Scan System32 processes for manually allocated memory that is executable.
+    //After testing, this functionality turns out to not be reliable enough for verifying system process integrity
+    //and will be replaced for driver-based hook and monitoring of remote allocations (NtAllocateVirtualMemory/NtMapViewOfSection)
+    SystemProcessDefender spd;
+
+    std::vector<SystemProcessDefender::ProcessInfo> systemProcesses;
+    std::vector<SystemProcessDefender::ProcessInfo> system32NonSystemUsers;
+    spd.GetSystem32Processes(systemProcesses, system32NonSystemUsers);
+
+    std::vector<SystemProcessDefender::ProcessInfo> allSystem32Processes = systemProcesses;
+    allSystem32Processes.insert(allSystem32Processes.end(), system32NonSystemUsers.begin(), system32NonSystemUsers.end());
+
+    std::vector<SystemProcessDefender::SuspiciousAllocation> allocations;
+    for (auto& process : allSystem32Processes)
+    {
+        
+        if (spd.FindSuspiciousExecutableAllocations(process.pid, allocations))
+        {
+            for (auto& allocation : allocations)
+            {
+                std::wcout << L"Found suspicious allocation in process " << process.path << L". At: " << allocation.baseAddress
+                    << L" size=" << allocation.regionSize
+                    << L" protection=0x" << std::hex << allocation.protect << std::dec
+                    << L" type=" << (allocation.type == MEM_PRIVATE ? L"PRIVATE" : L"MAPPED")
+                    << (allocation.writableExecutable ? L" [W+X]" : L" [X]") << L"\n";
+                if (!allocation.mappedFile.empty())
+                    std::wcout << L"  mapped file: " << allocation.mappedFile << L"\n";
+            }
+        }
+        else
+        {
+            std::wcout << L"Couldn't open process or scan memory (insufficient privileges?).\n";
+        }
     }
-
-
 
     return 0;
 }
