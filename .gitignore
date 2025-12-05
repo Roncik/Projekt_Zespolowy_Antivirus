@@ -477,3 +477,6 @@ fabric.properties
 
 # Hash database
 merged_hashes.txt
+
+# Old/unused files
+old_unused/
