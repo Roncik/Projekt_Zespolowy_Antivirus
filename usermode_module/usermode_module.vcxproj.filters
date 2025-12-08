@@ -22,6 +22,9 @@
     <Filter Include="3.2_SystemProcessDefender">
       <UniqueIdentifier>{35a77920-eef5-494b-bd0f-d80786466524}</UniqueIdentifier>
     </Filter>
+    <Filter Include="3.11_VirusTotal">
+      <UniqueIdentifier>{0a9c1060-9c5c-465e-88dd-b4e56da060da}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -48,6 +51,12 @@
     <ClCompile Include="SystemProcessDefender.cpp">
       <Filter>3.2_SystemProcessDefender</Filter>
     </ClCompile>
+    <ClCompile Include="VirusTotalManager.cpp">
+      <Filter>3.11_VirusTotal</Filter>
+    </ClCompile>
+    <ClCompile Include="HTTPSManager.cpp">
+      <Filter>3.11_VirusTotal</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -70,6 +79,12 @@
     </ClInclude>
     <ClInclude Include="SystemProcessDefender.h">
       <Filter>3.2_SystemProcessDefender</Filter>
+    </ClInclude>
+    <ClInclude Include="VirusTotalManager.h">
+      <Filter>3.11_VirusTotal</Filter>
+    </ClInclude>
+    <ClInclude Include="HTTPSManager.h">
+      <Filter>3.11_VirusTotal</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

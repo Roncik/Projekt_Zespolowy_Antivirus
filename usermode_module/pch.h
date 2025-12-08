@@ -1,4 +1,5 @@
 // PRECOMPILED HEADER FILE
+#define WIN32_LEAN_AND_MEAN
 
 #pragma once
 #include <iostream>
@@ -18,8 +19,19 @@
 #include <sddl.h>
 #include <wintrust.h>
 #include <softpub.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <map>
+#include <cctype>
+#include <stdexcept>
+#include <winhttp.h>
 
 #pragma comment(lib, "Psapi.lib")
 #pragma comment(lib, "Wintrust.lib")
 #pragma comment(lib, "Crypt32.lib")
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "wldap32.lib")
+#pragma comment(lib, "secur32.lib")
+#pragma comment(lib, "winhttp.lib")
+

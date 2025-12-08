@@ -2,6 +2,7 @@
 #include "MD5_HashManager.h"
 #include "FileScanner.h"
 #include "SystemProcessDefender.h"
+#include "HTTPSManager.h"
 
 int main()
 {
@@ -85,7 +86,7 @@ int main()
     //Scan System32 processes for manually allocated memory that is executable.
     //After testing, this functionality turns out to not be reliable enough for verifying system process integrity
     //and will be replaced for driver-based hook and monitoring of remote allocations (NtAllocateVirtualMemory/NtMapViewOfSection)
-    SystemProcessDefender spd;
+    /*SystemProcessDefender spd;
 
     std::vector<SystemProcessDefender::ProcessInfo> systemProcesses;
     std::vector<SystemProcessDefender::ProcessInfo> system32NonSystemUsers;
@@ -115,7 +116,21 @@ int main()
         {
             std::wcout << L"Couldn't open process or scan memory (insufficient privileges?).\n";
         }
+    }*/
+
+    //HTTPS request
+    HTTPSManager httpsMgr;
+    std::wstring hostname = L"www.virustotal.com";
+    std::wstring path = L"/api/v3/files/upload_url"; //https://www.virustotal.com/api/v3/files/upload_url
+    std::wstring HTTPRequestName = L"GET";
+    std::vector<char> response;
+    DWORD outStatusCode = 0;
+    httpsMgr.HTTPS_sendRequestAndReceiveResponse(hostname, path, HTTPRequestName, NULL, &response, &outStatusCode);
+    for (auto& character : response)
+    {
+        std::cout << character;
     }
+
 
     return 0;
 }
