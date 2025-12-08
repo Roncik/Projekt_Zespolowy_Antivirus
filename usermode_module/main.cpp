@@ -3,6 +3,7 @@
 #include "FileScanner.h"
 #include "SystemProcessDefender.h"
 #include "HTTPSManager.h"
+#include "VirusTotalManager.h"
 
 int main()
 {
@@ -98,7 +99,7 @@ int main()
     std::vector<SystemProcessDefender::SuspiciousAllocation> allocations;
     for (auto& process : allSystem32Processes)
     {
-        
+
         if (spd.FindSuspiciousExecutableAllocations(process.pid, allocations))
         {
             for (auto& allocation : allocations)
@@ -118,14 +119,14 @@ int main()
         }
     }*/
 
-    //HTTPS request
-    HTTPSManager httpsMgr;
-    std::wstring hostname = L"www.virustotal.com";
-    std::wstring path = L"/api/v3/files/upload_url"; //https://www.virustotal.com/api/v3/files/upload_url
-    std::wstring HTTPRequestName = L"GET";
+    //VirusTotal analyse file and get result
+    VirusTotalManager vtmgr = VirusTotalManager(L""); //VirusTotal API key https://www.virustotal.com/gui/my-apikey
     std::vector<char> response;
-    DWORD outStatusCode = 0;
-    httpsMgr.HTTPS_sendRequestAndReceiveResponse(hostname, path, HTTPRequestName, NULL, &response, &outStatusCode);
+    vtmgr.QueryFileForAnalysis("C:\\Users\\Administrator\\Desktop\\Firefox.exe", &response, NULL);
+    
+    //todo: make/add json parser
+    std::wstring analysisID(response.data()+0x25, response.data() + 0x61);
+    vtmgr.GetFileAnalysisResult(analysisID, &response);
     for (auto& character : response)
     {
         std::cout << character;

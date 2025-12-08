@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "HTTPSManager.h"
 
-bool HTTPSManager::HTTPS_sendRequestAndReceiveResponse(std::wstring& hostname, std::wstring& path, std::wstring& HTTPRequestName, _In_opt_ std::wstring* optionalHeaders,
+bool HTTPSManager::HTTPS_sendRequestAndReceiveResponse(std::wstring& hostname, std::wstring& path, std::wstring& HTTPRequestName, _In_opt_ std::wstring* optionalHeaders, _In_opt_ std::string* optionalData,
     _Inout_opt_ std::vector<char>* outResponse, _Inout_opt_ DWORD* outStatusCode)
 {
     if (hostname.length() == 0 || path.length() == 0 || HTTPRequestName.length() == 0)
@@ -30,11 +30,9 @@ bool HTTPSManager::HTTPS_sendRequestAndReceiveResponse(std::wstring& hostname, s
         return false;
     }
 
-    BOOL bRequestResult;
-    if (optionalHeaders)
-        bRequestResult = WinHttpSendRequest(hRequest, optionalHeaders->c_str(), static_cast<DWORD>(optionalHeaders->size()), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
-    else
-        bRequestResult = WinHttpSendRequest(hRequest, 0, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+    BOOL bRequestResult = WinHttpSendRequest(hRequest, optionalHeaders ? optionalHeaders->c_str() : 0, optionalHeaders ? static_cast<DWORD>(optionalHeaders->size()) : 0,
+        optionalData ? static_cast<LPVOID>(optionalData->data()) : 0, optionalData ? optionalData->length() : 0, optionalData ? static_cast<DWORD>(optionalData->length()) : 0, NULL);
+
     if (!bRequestResult)
     {
         WinHttpCloseHandle(hConnect);
@@ -63,6 +61,8 @@ bool HTTPSManager::HTTPS_sendRequestAndReceiveResponse(std::wstring& hostname, s
 
     if (outResponse)
     {
+        outResponse->clear();
+        
         // Read response
         std::vector<char> responseData;
         for (;;)
