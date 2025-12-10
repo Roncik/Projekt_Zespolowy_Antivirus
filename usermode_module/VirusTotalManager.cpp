@@ -26,7 +26,7 @@ bool VirusTotalManager::QueryFileForAnalysis(std::string file_path, _Inout_opt_ 
     HTTPSManager httpsMgr;
 
     //For files larger than 32MB we need to get a special url for upload
-    if (file_size > 32000000)
+    if (file_size > 32000000 && file_size <= 650000000)
     {
         std::wstring largeUploadPath = L"/api/v3/files/upload_url";
         std::wstring largeUploadHTTPRequestName = L"GET";
@@ -43,6 +43,10 @@ bool VirusTotalManager::QueryFileForAnalysis(std::string file_path, _Inout_opt_ 
         std::string pathstr = fullpathstr.substr(fullpathstr.find("virustotal.com") + 14);
         path.assign(pathstr.begin(), pathstr.end());
         hostname = L"bigfiles.virustotal.com";
+    }
+    else if (file_size > 650000000) //file is too large for analysis
+    {
+        return false;
     }
 
     const std::string boundary = "----VTFormBoundary7MA4YWxkTrZu0gW";
@@ -73,7 +77,9 @@ bool VirusTotalManager::QueryFileForAnalysis(std::string file_path, _Inout_opt_ 
     DWORD total_size = (DWORD)body_str.size();
 
     
-    return httpsMgr.HTTPS_sendRequestAndReceiveResponse(hostname, path, HTTPRequestName, &headers, &body_str, outResponse, outStatusCode);
+    bool result = httpsMgr.HTTPS_sendRequestAndReceiveResponse(hostname, path, HTTPRequestName, &headers, &body_str, outResponse, outStatusCode);
+
+    return outStatusCode ? *outStatusCode == 200 && result : result;
 }
 
 bool VirusTotalManager::GetFileAnalysisResult(std::wstring analysisID, _Inout_opt_ std::vector<char>* outResponse)
@@ -88,6 +94,41 @@ bool VirusTotalManager::GetFileAnalysisResult(std::wstring analysisID, _Inout_op
     std::wstring headers = L"x-apikey: " + this->API_KEY;
     
     HTTPSManager httpsMgr;
-    return httpsMgr.HTTPS_sendRequestAndReceiveResponse(hostname, path, HTTPRequestName, &headers, NULL, outResponse, NULL);;
+
+    DWORD requestStatus = -1;
+    bool result = httpsMgr.HTTPS_sendRequestAndReceiveResponse(hostname, path, HTTPRequestName, &headers, NULL, outResponse, &requestStatus);
+
+    return requestStatus == 200 && result;
+}
+
+bool VirusTotalManager::AnalyseFileGetResult(std::string file_path, FileAnalysisResult& result)
+{
+    std::vector<char> response;
+    DWORD status = -1;
+    if (!this->QueryFileForAnalysis(file_path, &response, &status))
+        return false;
+
+    nlohmann::json data = nlohmann::json::parse(response);
+    std::string analysisIDstr = data["data"]["id"];
+
+
+    std::wstring analysisID(analysisIDstr.begin(), analysisIDstr.end());
+    std::string analysisStatus;
+    while (analysisStatus != "completed")
+    {
+        this->GetFileAnalysisResult(analysisID, &response);
+        data = nlohmann::json::parse(response);
+        analysisStatus = data["data"]["attributes"]["status"];
+        Sleep(500);
+    }
+
+    if (data["data"]["attributes"]["stats"]["malicious"] > 10)
+        result = VirusTotalManager::FileAnalysisResult::MALICIOUS;
+    else if (data["data"]["attributes"]["stats"]["suspicious"] > 10)
+        result = VirusTotalManager::FileAnalysisResult::SUSPICIOUS;
+    else
+        result = VirusTotalManager::FileAnalysisResult::UNDETECTED;
+
+    return true;
 }
 

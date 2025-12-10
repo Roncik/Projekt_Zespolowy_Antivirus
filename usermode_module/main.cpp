@@ -121,29 +121,18 @@ int main()
 
     //VirusTotal analyse file and get result
     VirusTotalManager vtmgr = VirusTotalManager(L"c164bc01db151497cc74f370c2b8d4f41d020d79030db9b9db7eca737869e99e"); //VirusTotal API key https://www.virustotal.com/gui/my-apikey
-    std::vector<char> response;
-    vtmgr.QueryFileForAnalysis("C:\\Users\\Administrator\\Desktop\\Firefox.exe", &response, NULL);
-    
-    nlohmann::json data = nlohmann::json::parse(response);
-    std::string analysisIDstr = data["data"]["id"];
+    VirusTotalManager::FileAnalysisResult result;
 
-    
-    std::wstring analysisID(analysisIDstr.begin(), analysisIDstr.end());
-    std::string analysisStatus;
-    while (analysisStatus != "completed")
-    {
-        vtmgr.GetFileAnalysisResult(analysisID, &response);
-        data = nlohmann::json::parse(response);
-        analysisStatus = data["data"]["attributes"]["status"];
-    }
+    //below function will have a long execution time (>60sec) we will use multithreading for the vt scans
+    if (!vtmgr.AnalyseFileGetResult("C:\\Users\\Administrator\\Desktop\\Firefox.exe", result))
+        std::wcout << L"file analysis failed\n";
 
-    if (data["data"]["attributes"]["stats"]["malicious"] > 10)
+    if (result == VirusTotalManager::FileAnalysisResult::MALICIOUS)
         std::wcout << L"file is malicious\n";
-    else if (data["data"]["attributes"]["stats"]["suspicious"] > 10)
+    else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
         std::wcout << L"file is suspicious\n";
     else
         std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
-
 
     return 0;
 }

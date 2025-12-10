@@ -28,6 +28,6 @@ public:
 
 	bool GetFileAnalysisResult(std::wstring analysisID, _Inout_opt_ std::vector<char>* outResponse);
 
-	FileAnalysisResult QueryFileGetAnalysisResult();
+	bool AnalyseFileGetResult(std::string file_path, FileAnalysisResult& result);
 };
 
