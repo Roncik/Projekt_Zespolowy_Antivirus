@@ -16,8 +16,18 @@ public:
 		this->API_KEY.clear();
 	}
 
+	enum FileAnalysisResult : int8_t
+	{
+		UNDETECTED = 0,
+		MALICIOUS = 1,
+		SUSPICIOUS = 2,
+		INVALID = 3
+	};
+
 	bool QueryFileForAnalysis(std::string file_path, _Inout_opt_ std::vector<char>* outResponse, _Inout_opt_ DWORD* outStatusCode);
 
 	bool GetFileAnalysisResult(std::wstring analysisID, _Inout_opt_ std::vector<char>* outResponse);
+
+	FileAnalysisResult QueryFileGetAnalysisResult();
 };
 

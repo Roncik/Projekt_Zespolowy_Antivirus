@@ -129,12 +129,20 @@ int main()
 
     
     std::wstring analysisID(analysisIDstr.begin(), analysisIDstr.end());
-    vtmgr.GetFileAnalysisResult(analysisID, &response);
-    //todo: use json parser to check results
-    for (auto& character : response)
+    std::string analysisStatus;
+    while (analysisStatus != "completed")
     {
-        std::cout << character;
+        vtmgr.GetFileAnalysisResult(analysisID, &response);
+        data = nlohmann::json::parse(response);
+        analysisStatus = data["data"]["attributes"]["status"];
     }
+
+    if (data["data"]["attributes"]["stats"]["malicious"] > 10)
+        std::wcout << L"file is malicious\n";
+    else if (data["data"]["attributes"]["stats"]["suspicious"] > 10)
+        std::wcout << L"file is suspicious\n";
+    else
+        std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
 
 
     return 0;

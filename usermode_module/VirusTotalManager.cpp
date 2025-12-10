@@ -6,26 +6,56 @@ bool VirusTotalManager::QueryFileForAnalysis(std::string file_path, _Inout_opt_ 
 {
     if (file_path.length() == 0)
         return false;
-    
-    HTTPSManager httpsMgr;
-
-    std::wstring hostname = L"www.virustotal.com";
-    std::wstring path = L"/api/v3/files"; 
-    std::wstring HTTPRequestName = L"POST";
 
     std::string filename = file_path.substr(file_path.find_last_of("/\\"));
     std::ifstream f(file_path, std::ios::binary);
-    if (!f) 
+    if (!f)
     {
         return false;
     }
 
     std::vector<char> file_data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
     f.close();
+    DWORD file_size = file_data.size();
+    
 
-    // Build multipart body
+    std::wstring hostname = L"www.virustotal.com";
+    std::wstring path = L"/api/v3/files"; 
+    std::wstring HTTPRequestName = L"POST";
+
+    HTTPSManager httpsMgr;
+
+    //For files larger than 32MB we need to get a special url for upload
+    if (file_size > 32000000)
+    {
+        std::wstring largeUploadPath = L"/api/v3/files/upload_url";
+        std::wstring largeUploadHTTPRequestName = L"GET";
+        std::wstring headers = L"x-apikey: " + this->API_KEY;
+        std::vector<char> response;
+        DWORD statusCode = -1;
+        httpsMgr.HTTPS_sendRequestAndReceiveResponse(hostname, largeUploadPath, largeUploadHTTPRequestName, &headers, NULL, &response, &statusCode);
+        if (statusCode != 200) //status: success
+        {
+            return false;
+        }
+        nlohmann::json data = nlohmann::json::parse(response);
+        std::string fullpathstr = data["data"];
+        std::string pathstr = fullpathstr.substr(fullpathstr.find("virustotal.com") + 14);
+        path.assign(pathstr.begin(), pathstr.end());
+        hostname = L"bigfiles.virustotal.com";
+    }
+
     const std::string boundary = "----VTFormBoundary7MA4YWxkTrZu0gW";
 
+    auto utf8_to_wstring = [](const std::string& s) -> std::wstring
+        {
+            int len = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
+            std::wstring ws(len, L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &ws[0], len);
+            return ws;
+        };
+
+    // Build multipart body
     std::ostringstream body;
     body << "--" << boundary << "\r\n";
     body << "Content-Disposition: form-data; name=\"file\"; filename=\"" << filename << "\"\r\n";
@@ -35,19 +65,14 @@ bool VirusTotalManager::QueryFileForAnalysis(std::string file_path, _Inout_opt_ 
 
     std::string body_str = body.str();
 
-    auto utf8_to_wstring = [](const std::string & s) -> std::wstring
-        {
-            int len = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
-            std::wstring ws(len, L'\0');
-            MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &ws[0], len);
-            return ws;
-        };
+    
 
-    // Build proper headers (IMPORTANT)
+    // Build headers
     std::wstring headers = L"x-apikey: " + this->API_KEY + L"\r\n" + utf8_to_wstring("Content-Type: multipart/form-data; boundary=" + boundary);
 
     DWORD total_size = (DWORD)body_str.size();
 
+    
     return httpsMgr.HTTPS_sendRequestAndReceiveResponse(hostname, path, HTTPRequestName, &headers, &body_str, outResponse, outStatusCode);
 }
 
@@ -55,8 +80,6 @@ bool VirusTotalManager::GetFileAnalysisResult(std::wstring analysisID, _Inout_op
 {
     if (analysisID.length() == 0)
         return false;
-    
-    HTTPSManager httpsMgr;
 
     std::wstring hostname = L"www.virustotal.com";
     std::wstring path = L"/api/v3/analyses/" + analysisID;
@@ -64,6 +87,7 @@ bool VirusTotalManager::GetFileAnalysisResult(std::wstring analysisID, _Inout_op
     
     std::wstring headers = L"x-apikey: " + this->API_KEY;
     
+    HTTPSManager httpsMgr;
     return httpsMgr.HTTPS_sendRequestAndReceiveResponse(hostname, path, HTTPRequestName, &headers, NULL, outResponse, NULL);;
 }
 
