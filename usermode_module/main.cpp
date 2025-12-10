@@ -120,13 +120,17 @@ int main()
     }*/
 
     //VirusTotal analyse file and get result
-    VirusTotalManager vtmgr = VirusTotalManager(L""); //VirusTotal API key https://www.virustotal.com/gui/my-apikey
+    VirusTotalManager vtmgr = VirusTotalManager(L"c164bc01db151497cc74f370c2b8d4f41d020d79030db9b9db7eca737869e99e"); //VirusTotal API key https://www.virustotal.com/gui/my-apikey
     std::vector<char> response;
     vtmgr.QueryFileForAnalysis("C:\\Users\\Administrator\\Desktop\\Firefox.exe", &response, NULL);
     
-    //todo: make/add json parser
-    std::wstring analysisID(response.data()+0x25, response.data() + 0x61);
+    nlohmann::json data = nlohmann::json::parse(response);
+    std::string analysisIDstr = data["data"]["id"];
+
+    
+    std::wstring analysisID(analysisIDstr.begin(), analysisIDstr.end());
     vtmgr.GetFileAnalysisResult(analysisID, &response);
+    //todo: use json parser to check results
     for (auto& character : response)
     {
         std::cout << character;

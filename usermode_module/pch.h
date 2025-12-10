@@ -26,6 +26,9 @@
 #include <stdexcept>
 #include <winhttp.h>
 
+// Library for json - https://github.com/nlohmann/json
+#include "nlohmann/json.hpp"
+
 #pragma comment(lib, "Psapi.lib")
 #pragma comment(lib, "Wintrust.lib")
 #pragma comment(lib, "Crypt32.lib")
