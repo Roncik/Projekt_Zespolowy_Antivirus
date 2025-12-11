@@ -28,7 +28,7 @@ bool SystemProcessDefender::VerifyEmbeddedSignature(const std::wstring& filePath
     return (status == ERROR_SUCCESS);
 }
 
-void SystemProcessDefender::GetSystem32Processes(std::vector<SystemProcessDefender::ProcessInfo>& systemProcesses, std::vector<SystemProcessDefender::ProcessInfo>& nonSystemSystem32Processes)
+void SystemProcessDefender::GetSystem32Processes(std::vector<SystemProcessDefender::SystemProcessInfo>& systemProcesses, std::vector<SystemProcessDefender::SystemProcessInfo>& nonSystemSystem32Processes)
 {
     // prepare windows system32 path for comparisons
     wchar_t winDir[MAX_PATH];
@@ -88,7 +88,7 @@ void SystemProcessDefender::GetSystem32Processes(std::vector<SystemProcessDefend
             // If it's a system account, record it
             if (isSystemAccount)
             {
-                systemProcesses.push_back(SystemProcessDefender::ProcessInfo{ pid, gotPath ? path : L"<no path>", domain, user });
+                systemProcesses.push_back(SystemProcessDefender::SystemProcessInfo{ pid, gotPath ? path : L"<no path>", domain, user });
             }
 
             // Check if the path is under C:\Windows\System32 but user is NOT NT AUTHORITY/SYSTEM
@@ -100,7 +100,7 @@ void SystemProcessDefender::GetSystem32Processes(std::vector<SystemProcessDefend
                 {
                     if (!isSystemAccount)
                     {
-                        nonSystemSystem32Processes.push_back(SystemProcessDefender::ProcessInfo{ pid, path, domain, user });
+                        nonSystemSystem32Processes.push_back(SystemProcessDefender::SystemProcessInfo{ pid, path, domain, user });
                     }
                 }
             }

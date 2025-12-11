@@ -47,6 +47,29 @@ pair<bool, MD5_HashManager::Hash16> MD5_HashManager::Hash16::from_hexstring(cons
     return { true, from_bytes(bytes) };
 }
 
+std::string MD5_HashManager::Hash16::to_hexstring32()
+{
+    static const char hex[] = "0123456789abcdef";
+    std::string out;
+    out.resize(32);
+
+    // For hi: emit bytes LSB first (i = 0 => least-significant byte)
+    for (int i = 0; i < 8; ++i) {
+        uint8_t byte = static_cast<uint8_t>((hi >> (i * 8)) & 0xFFu);
+        out[2 * i] = hex[(byte >> 4) & 0xF];
+        out[2 * i + 1] = hex[byte & 0xF];
+    }
+
+    // For lo: same (LSB first), placed after the first 16 hex chars
+    for (int i = 0; i < 8; ++i) {
+        uint8_t byte = static_cast<uint8_t>((lo >> (i * 8)) & 0xFFu);
+        out[16 + 2 * i] = hex[(byte >> 4) & 0xF];
+        out[16 + 2 * i + 1] = hex[byte & 0xF];
+    }
+
+    return out;
+}
+
 bool MD5_HashManager::load_db_into_memory(const string& path, vector<Hash16>& out)
 {
     ifstream ifs(path, ios::binary | ios::ate); //ios::binary | ios::ate
@@ -97,23 +120,40 @@ bool MD5_HashManager::contains_hash(const std::vector<Hash16>& db, const Hash16&
 }
 
 // Compute MD5 for a file at wide path.
-bool MD5_HashManager::computeFileMd5(HCRYPTPROV hProv, const std::wstring& wfilePath, MD5_HashManager::Hash16& outHex) 
+bool MD5_HashManager::computeFileMd5(_In_opt_ HCRYPTPROV hProv, const std::wstring& wfilePath, MD5_HashManager::Hash16& outHex) 
 {
-    HCRYPTPROV prov = hProv;
+    HCRYPTPROV prov;
+    if (!hProv)
+    {
+        if (!CryptAcquireContextW(&prov, nullptr, nullptr, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
+        {
+            return false;
+        }
+    }
+    else
+        prov = hProv;
+    
+    
     HCRYPTHASH hHash = 0;
 
-    if (!CryptCreateHash(prov, CALG_MD5, 0, 0, &hHash)) {
+    if (!CryptCreateHash(prov, CALG_MD5, 0, 0, &hHash)) 
+    {
         // failed to create hash
+        if (!hProv) 
+            CryptReleaseContext(prov, 0);
         return false;
     }
 
     // Open file for reading
     // To support long paths, prefix with \\?\ if needed
     std::wstring pathWithPrefix = wfilePath;
-    if (pathWithPrefix.size() >= MAX_PATH) {
-        if (pathWithPrefix.rfind(L"\\\\?\\", 0) != 0) {
+    if (pathWithPrefix.size() >= MAX_PATH) 
+    {
+        if (pathWithPrefix.rfind(L"\\\\?\\", 0) != 0) 
+        {
             // For UNC paths beginning with \\ add UNC form
-            if (pathWithPrefix.rfind(L"\\\\", 0) == 0) {
+            if (pathWithPrefix.rfind(L"\\\\", 0) == 0) 
+            {
                 pathWithPrefix = L"\\\\?\\UNC" + pathWithPrefix.substr(1); // replace leading "\\" with "\\?\UNC\"
             }
             else {
@@ -122,26 +162,23 @@ bool MD5_HashManager::computeFileMd5(HCRYPTPROV hProv, const std::wstring& wfile
         }
     }
 
-    HANDLE hFile = CreateFileW(
-        pathWithPrefix.c_str(),
-        GENERIC_READ,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        nullptr,
-        OPEN_EXISTING,
-        FILE_FLAG_SEQUENTIAL_SCAN,
-        nullptr
-    );
+    HANDLE hFile = CreateFileW(pathWithPrefix.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
 
-    if (hFile == INVALID_HANDLE_VALUE) {
+    if (hFile == INVALID_HANDLE_VALUE) 
+    {
         CryptDestroyHash(hHash);
+        if (!hProv)
+            CryptReleaseContext(prov, 0);
         return false;
     }
 
     std::vector<BYTE> buffer(MD5_HashManager::READ_BUFFER_SIZE);
     DWORD bytesRead = 0;
     BOOL readOK = TRUE;
-    while (ReadFile(hFile, buffer.data(), (DWORD)buffer.size(), &bytesRead, nullptr) && bytesRead > 0) {
-        if (!CryptHashData(hHash, buffer.data(), bytesRead, 0)) {
+    while (ReadFile(hFile, buffer.data(), (DWORD)buffer.size(), &bytesRead, nullptr) && bytesRead > 0) 
+    {
+        if (!CryptHashData(hHash, buffer.data(), bytesRead, 0)) 
+        {
             readOK = FALSE;
             break;
         }
@@ -149,28 +186,37 @@ bool MD5_HashManager::computeFileMd5(HCRYPTPROV hProv, const std::wstring& wfile
 
     CloseHandle(hFile);
 
-    if (!readOK) {
+    if (!readOK) 
+    {
         CryptDestroyHash(hHash);
+        if (!hProv)
+            CryptReleaseContext(prov, 0);
         return false;
     }
 
     // Get hash size
     DWORD hashLen = 0;
     DWORD cbHashLen = sizeof(hashLen);
-    if (!CryptGetHashParam(hHash, HP_HASHSIZE, reinterpret_cast<BYTE*>(&hashLen), &cbHashLen, 0)) {
+    if (!CryptGetHashParam(hHash, HP_HASHSIZE, reinterpret_cast<BYTE*>(&hashLen), &cbHashLen, 0)) 
+    {
         // fallback: try HP_HASHVAL directly
         hashLen = 16; // MD5 fixed length
     }
 
     std::vector<BYTE> hashBytes(hashLen);
     DWORD cbHashBytes = (DWORD)hashBytes.size();
-    if (!CryptGetHashParam(hHash, HP_HASHVAL, hashBytes.data(), &cbHashBytes, 0)) {
+    if (!CryptGetHashParam(hHash, HP_HASHVAL, hashBytes.data(), &cbHashBytes, 0)) 
+    {
         CryptDestroyHash(hHash);
+        if (!hProv)
+            CryptReleaseContext(prov, 0);
         return false;
     }
 
     memcpy(&outHex, hashBytes.data(), hashLen);
 
     CryptDestroyHash(hHash);
+    if (!hProv)
+        CryptReleaseContext(prov, 0);
     return true;
 }

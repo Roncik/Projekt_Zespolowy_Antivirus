@@ -9,7 +9,7 @@ private:
     SignatureManager signatureManager;
 
 public:
-    struct ProcessInfo
+    struct SystemProcessInfo
     {
         DWORD pid;
         std::wstring path;
@@ -56,7 +56,7 @@ public:
 
     bool VerifyEmbeddedSignature(const std::wstring& filePath);
 
-    void GetSystem32Processes(std::vector<ProcessInfo>& systemProcesses, std::vector<ProcessInfo>& nonSystemSystem32Processes);
+    void GetSystem32Processes(std::vector<SystemProcessInfo>& systemProcesses, std::vector<SystemProcessInfo>& nonSystemSystem32Processes);
 
     bool CompareImageSectionsWithDisk(DWORD pid, std::vector<SectionMismatch>& outMismatches, std::wstring& outMainModulePath);
 

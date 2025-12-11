@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "VirusTotalManager.h"
 #include "HTTPSManager.h"
+#include "MD5_HashManager.h"
 
 bool VirusTotalManager::QueryFileForAnalysis(std::string file_path, _Inout_opt_ std::vector<char>* outResponse, _Inout_opt_ DWORD* outStatusCode)
 {
@@ -101,9 +102,51 @@ bool VirusTotalManager::GetFileAnalysisResult(std::wstring analysisID, _Inout_op
     return requestStatus == 200 && result;
 }
 
+bool VirusTotalManager::GetFileReport(std::wstring fileHashHexString, _Inout_opt_ std::vector<char>* outResponse)
+{
+    if (fileHashHexString.length() == 0)
+        return false;
+
+    std::wstring hostname = L"www.virustotal.com";
+    std::wstring path = L"/api/v3/files/" + fileHashHexString;
+    std::wstring HTTPRequestName = L"GET";
+
+    std::wstring headers = L"x-apikey: " + this->API_KEY;
+
+    HTTPSManager httpsMgr;
+
+    DWORD requestStatus = -1;
+    bool result = httpsMgr.HTTPS_sendRequestAndReceiveResponse(hostname, path, HTTPRequestName, &headers, NULL, outResponse, &requestStatus);
+
+    return requestStatus == 200 && result;
+}
+
 bool VirusTotalManager::AnalyseFileGetResult(std::string file_path, FileAnalysisResult& result)
 {
+    //First check if virustotal already has the file in its database
+    MD5_HashManager hashMgr;
+    std::wstring wfilePath(file_path.begin(), file_path.end());
+    MD5_HashManager::Hash16 hash;
+    hashMgr.computeFileMd5(NULL, wfilePath, hash);
+    std::string hexstring32 = hash.to_hexstring32();
+    std::wstring whexstring32(hexstring32.begin(), hexstring32.end());
     std::vector<char> response;
+    if (this->GetFileReport(whexstring32, &response)) //File is in virustotal database
+    {
+        nlohmann::json data = nlohmann::json::parse(response);
+
+        if (data["data"]["attributes"]["last_analysis_stats"]["malicious"] > 10)
+            result = VirusTotalManager::FileAnalysisResult::MALICIOUS;
+        else if (data["data"]["attributes"]["last_analysis_stats"]["suspicious"] > 10)
+            result = VirusTotalManager::FileAnalysisResult::SUSPICIOUS;
+        else
+            result = VirusTotalManager::FileAnalysisResult::UNDETECTED;
+
+        return true;
+    }
+
+    
+
     DWORD status = -1;
     if (!this->QueryFileForAnalysis(file_path, &response, &status))
         return false;

@@ -28,6 +28,8 @@ public:
 
 	bool GetFileAnalysisResult(std::wstring analysisID, _Inout_opt_ std::vector<char>* outResponse);
 
+	bool GetFileReport(std::wstring fileHashHexString, _Inout_opt_ std::vector<char>* outResponse);
+
 	bool AnalyseFileGetResult(std::string file_path, FileAnalysisResult& result);
 };
 

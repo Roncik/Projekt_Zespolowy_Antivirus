@@ -5,7 +5,6 @@ void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const 
 {
     if (blacklist.empty())
     {
-        std::cerr << "MD5 blacklist is empty. Scan aborted" << std::endl;
         return;
     }
 
@@ -86,7 +85,6 @@ void FileScanner::ScanAllDirectories_MD5()
 {
     if (this->MD5HashBlacklist.empty())
     {
-        std::cerr << "MD5 blacklist is empty. Scan aborted" << std::endl;
         return;
     }
 
@@ -94,7 +92,6 @@ void FileScanner::ScanAllDirectories_MD5()
     HCRYPTPROV hProv = 0;
     if (!CryptAcquireContextW(&hProv, nullptr, nullptr, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
     {
-        std::cerr << "CryptAcquireContext failed. Error: " << GetLastError() << std::endl;
         return;
     }
 
@@ -102,7 +99,6 @@ void FileScanner::ScanAllDirectories_MD5()
     DWORD drives = GetLogicalDrives();
     if (drives == 0)
     {
-        std::cerr << "GetLogicalDrives failed. Error: " << GetLastError() << std::endl;
         CryptReleaseContext(hProv, 0);
         return;
     }

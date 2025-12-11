@@ -165,3 +165,116 @@ bool ProcessManager::IsWritableExecutable(DWORD prot)
         return false;
     }
 }
+
+bool ProcessManager::GetAllProcesses(std::vector<ProcessInfo>& processes)
+{
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (!ntdll)
+        return false;
+
+    typedef NTSTATUS(NTAPI* NtQuerySystemInformation_t)(ULONG SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength);
+
+    auto NtQuerySystemInformation = (NtQuerySystemInformation_t)GetProcAddress(ntdll, "NtQuerySystemInformation");
+    if (!NtQuerySystemInformation) 
+        return false;
+
+    ULONG bufferSize = 1;
+    std::vector<BYTE> buffer;
+    NTSTATUS status;
+    ULONG returnLen = 0;
+    
+    static const NTSTATUS STATUS_INFO_LENGTH_MISMATCH = (NTSTATUS)0xC0000004L;
+
+    typedef struct _UNICODE_STRING 
+    {
+        USHORT Length;
+        USHORT MaximumLength;
+        PWSTR  Buffer;
+    } UNICODE_STRING;
+
+    typedef LONG KPRIORITY;
+
+    typedef struct _SYSTEM_PROCESS_INFORMATION {
+        ULONG NextEntryOffset;
+        ULONG NumberOfThreads;
+        LARGE_INTEGER Reserved[3];         
+        LARGE_INTEGER CreateTime;
+        LARGE_INTEGER UserTime;
+        LARGE_INTEGER KernelTime;
+        UNICODE_STRING ImageName;
+        KPRIORITY BasePriority;
+        HANDLE UniqueProcessId;
+        HANDLE InheritedFromUniqueProcessId;
+        ULONG HandleCount;
+        ULONG SessionId;
+        SIZE_T PeakVirtualSize;
+        SIZE_T VirtualSize;
+        ULONG PageFaultCount;
+        SIZE_T PeakWorkingSetSize;
+        SIZE_T WorkingSetSize;
+        SIZE_T QuotaPeakPagedPoolUsage;
+        SIZE_T QuotaPagedPoolUsage;
+        SIZE_T QuotaPeakNonPagedPoolUsage;
+        SIZE_T QuotaNonPagedPoolUsage;
+        SIZE_T PagefileUsage;
+        SIZE_T PeakPagefileUsage;
+        SIZE_T PrivatePageCount;
+        LARGE_INTEGER ReadOperationCount;
+        LARGE_INTEGER WriteOperationCount;
+        LARGE_INTEGER OtherOperationCount;
+        // followed by SYSTEM_THREAD_INFORMATION array which we don't parse
+    } SYSTEM_PROCESS_INFORMATION;
+
+
+    //Get array of SYSTEM_PROCESS_INFORMATION
+    while (true) 
+    {
+        buffer.resize(bufferSize);
+        status = NtQuerySystemInformation(5, buffer.data(), bufferSize, &returnLen); // 5 = SystemProcessInformation
+        if (status == STATUS_INFO_LENGTH_MISMATCH) 
+        {
+            if (returnLen > bufferSize) 
+                bufferSize = returnLen;
+            else 
+                bufferSize += 10000;
+            continue;
+        }
+        else if (status < 0) 
+        {
+            return false;
+        }
+        break;
+    }
+
+    auto make_wstring_from_unicode_string = [](const UNICODE_STRING& u) ->std::wstring
+        {
+            if (u.Length == 0 || u.Buffer == nullptr) 
+                return std::wstring();
+            // Length is in bytes
+            return std::wstring(u.Buffer, u.Length / sizeof(WCHAR));
+        };
+
+
+
+    BYTE* ptr = buffer.data();
+    const BYTE* bufferEnd = buffer.data() + buffer.size();
+
+    while (ptr < bufferEnd) 
+    {
+        SYSTEM_PROCESS_INFORMATION* spi = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(ptr);
+
+        std::wstring name = make_wstring_from_unicode_string(spi->ImageName);
+        if (name.empty())
+        {
+            // System process (often PID 0) or unnamed
+            name = L"<System Process>";
+        }
+
+        processes.push_back({ spi->UniqueProcessId, spi->InheritedFromUniqueProcessId, name });
+
+        if (spi->NextEntryOffset == 0) 
+            break; // last entry
+        ptr += spi->NextEntryOffset;
+    }
+
+}

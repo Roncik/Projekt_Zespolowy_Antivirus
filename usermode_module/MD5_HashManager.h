@@ -13,6 +13,8 @@ public:
         // Parse hex string (may contain whitespace). Return pair(success, Hash16)
         static std::pair<bool, Hash16> from_hexstring(const std::string& s);
 
+        std::string to_hexstring32(); 
+
 
         bool operator<(const Hash16& o) const noexcept
         {
@@ -37,6 +39,6 @@ public:
     bool contains_hash(const std::vector<Hash16>& db, const Hash16& q);
 
     // Compute MD5 for a file at wide path
-    bool computeFileMd5(HCRYPTPROV hProv, const std::wstring& wfilePath, Hash16& outHex);
+    bool computeFileMd5(_In_opt_ HCRYPTPROV hProv, const std::wstring& wfilePath, Hash16& outHex);
 };
 

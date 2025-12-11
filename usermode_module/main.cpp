@@ -4,6 +4,7 @@
 #include "SystemProcessDefender.h"
 #include "HTTPSManager.h"
 #include "VirusTotalManager.h"
+#include "ProcessManager.h"
 
 int main()
 {
@@ -120,19 +121,68 @@ int main()
     }*/
 
     //VirusTotal analyse file and get result
+    //VirusTotalManager vtmgr = VirusTotalManager(L"c164bc01db151497cc74f370c2b8d4f41d020d79030db9b9db7eca737869e99e"); //VirusTotal API key https://www.virustotal.com/gui/my-apikey
+    //VirusTotalManager::FileAnalysisResult result;
+
+    ////below function will have a long execution time (>60sec) we will use multithreading for the vt scans
+    //if (!vtmgr.AnalyseFileGetResult("C:\\Users\\Administrator\\Desktop\\Firefox.exe", result))
+    //    std::wcout << L"file analysis failed\n";
+
+    //if (result == VirusTotalManager::FileAnalysisResult::MALICIOUS)
+    //    std::wcout << L"file is malicious\n";
+    //else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
+    //    std::wcout << L"file is suspicious\n";
+    //else
+    //    std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
+
+    ProcessManager procmgr;
+    std::vector<ProcessManager::ProcessInfo> processes;
+    procmgr.GetAllProcesses(processes);
+
+    MD5_HashManager hashmgr;
     VirusTotalManager vtmgr = VirusTotalManager(L"c164bc01db151497cc74f370c2b8d4f41d020d79030db9b9db7eca737869e99e"); //VirusTotal API key https://www.virustotal.com/gui/my-apikey
-    VirusTotalManager::FileAnalysisResult result;
+    std::vector<MD5_HashManager::Hash16> undetectedFiles;
+    for (auto& process : processes)
+    {
+        std::wstring processPath;
+        if (!procmgr.GetProcessImagePath(reinterpret_cast<DWORD>(process.processID), processPath))
+        {
+            std::wcout << L"Failed getting path for process: " << process.processName << L"\n";
+            continue;
+        }
 
-    //below function will have a long execution time (>60sec) we will use multithreading for the vt scans
-    if (!vtmgr.AnalyseFileGetResult("C:\\Users\\Administrator\\Desktop\\Firefox.exe", result))
-        std::wcout << L"file analysis failed\n";
+        MD5_HashManager::Hash16 processFileHash;
+        if (!hashmgr.computeFileMd5(NULL, processPath, processFileHash))
+        {
+            std::wcout << L"Failed getting hash for process: " << process.processName << L"\n";
+            continue;
+        }
 
-    if (result == VirusTotalManager::FileAnalysisResult::MALICIOUS)
-        std::wcout << L"file is malicious\n";
-    else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
-        std::wcout << L"file is suspicious\n";
-    else
-        std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
+        if (std::find(undetectedFiles.begin(), undetectedFiles.end(), processFileHash) != undetectedFiles.end()) //file was already scanned before
+        {
+            continue;
+        }
+
+        VirusTotalManager::FileAnalysisResult result;
+        std::string processPathStr(processPath.begin(), processPath.end());
+
+        std::wcout << L"Now scanning: " << process.processName << L" - ";
+        if (!vtmgr.AnalyseFileGetResult(processPathStr, result))
+        {
+            std::wcout << L"file analysis failed\n";
+            continue;
+        }
+
+        if (result == VirusTotalManager::FileAnalysisResult::MALICIOUS)
+            std::wcout << L"file is malicious\n";
+        else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
+            std::wcout << L"file is suspicious\n";
+        else
+        {
+            std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
+            undetectedFiles.push_back(processFileHash);
+        }
+    }
 
     return 0;
 }
