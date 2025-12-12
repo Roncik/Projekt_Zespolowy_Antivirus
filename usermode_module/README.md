@@ -29,9 +29,18 @@ Provides methods:
 - **GetProcessOwner** - given a PID finds the user and domain assigned to the process.
 - **DevicePathToDosPath** - converts device path to DOS path.
 - **IsExecuteProtection, IsWritableExecutable** - checks page protection mask properties.
+- **GetAllProcesses** - uses NtQuerySystemInformation to enumerate all running processes in the system.
 
 ### PrivilegeManager Class
 Provides method for enabling debug privilege on current process
 
 ### SignatureManager Class
 Provides functions for parsing code signatures and finding signatures in a given byte buffer.
+
+## 3.11 VirusTotal
+
+### VirusTotalManager Class
+Provides methods for analysing files using the VirusTotal api(via https requests)
+
+### HTTPSManager Class
+Provides methods for sending HTTPS requests using windows's WINHTTP library
