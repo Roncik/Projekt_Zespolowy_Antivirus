@@ -9,6 +9,12 @@ public:
         std::wstring processName;
     };
 
+    struct SystemModuleInfo
+    {
+        std::wstring fileName;
+        std::wstring filePath;
+    };
+
     bool GetMainModuleBase(DWORD pid, uintptr_t& outBase, std::wstring& outPath);
 
     bool GetProcessImagePath(DWORD pid, std::wstring& outPath);
@@ -22,5 +28,7 @@ public:
     bool IsWritableExecutable(DWORD prot);
 
     bool GetAllProcesses(std::vector<ProcessInfo>& processes);
+
+    bool GetAllSystemModules(std::vector<SystemModuleInfo>& systemModules);
 };
 

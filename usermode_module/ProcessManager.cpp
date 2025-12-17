@@ -225,12 +225,13 @@ bool ProcessManager::GetAllProcesses(std::vector<ProcessInfo>& processes)
         // followed by SYSTEM_THREAD_INFORMATION array which we don't parse
     } SYSTEM_PROCESS_INFORMATION;
 
+    static const ULONG SystemProcessInformation = 5;
 
     //Get array of SYSTEM_PROCESS_INFORMATION
     while (true) 
     {
         buffer.resize(bufferSize);
-        status = NtQuerySystemInformation(5, buffer.data(), bufferSize, &returnLen); // 5 = SystemProcessInformation
+        status = NtQuerySystemInformation(SystemProcessInformation, buffer.data(), bufferSize, &returnLen); // 5 = SystemProcessInformation
         if (status == STATUS_INFO_LENGTH_MISMATCH) 
         {
             if (returnLen > bufferSize) 
@@ -277,4 +278,77 @@ bool ProcessManager::GetAllProcesses(std::vector<ProcessInfo>& processes)
         ptr += spi->NextEntryOffset;
     }
 
+    return true;
+}
+
+bool ProcessManager::GetAllSystemModules(std::vector<SystemModuleInfo>& systemModules)
+{
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (!ntdll)
+        return false;
+
+    typedef NTSTATUS(NTAPI* NtQuerySystemInformation_t)(ULONG SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength);
+
+    auto NtQuerySystemInformation = (NtQuerySystemInformation_t)GetProcAddress(ntdll, "NtQuerySystemInformation");
+    if (!NtQuerySystemInformation)
+        return false;
+    
+    ULONG bufSize = 0x1;
+    std::vector<BYTE> buffer(bufSize);
+    ULONG needed = 0;
+
+    typedef struct _RTL_PROCESS_MODULE_INFORMATION {
+        HANDLE  Section;
+        PVOID   MappedBase;
+        PVOID   ImageBase;
+        ULONG   ImageSize;
+        ULONG   Flags;
+        USHORT  LoadOrderIndex;
+        USHORT  InitOrderIndex;
+        USHORT  LoadCount;
+        USHORT  OffsetToFileName;
+        UCHAR   FullPathName[256];
+    } RTL_PROCESS_MODULE_INFORMATION, * PRTL_PROCESS_MODULE_INFORMATION;
+
+    typedef struct _RTL_PROCESS_MODULES {
+        ULONG NumberOfModules;
+        RTL_PROCESS_MODULE_INFORMATION Modules[1];
+    } RTL_PROCESS_MODULES, * PRTL_PROCESS_MODULES;
+
+    static const ULONG SystemModuleInformation = 11;
+    static const NTSTATUS STATUS_INFO_LENGTH_MISMATCH = (NTSTATUS)0xC0000004L;
+
+    NTSTATUS status = NtQuerySystemInformation(SystemModuleInformation, buffer.data(), bufSize, &needed);
+
+    if (status == STATUS_INFO_LENGTH_MISMATCH) 
+    {
+        buffer.resize(needed);
+        status = NtQuerySystemInformation(SystemModuleInformation, buffer.data(), needed, &needed);
+    }
+
+    if (status < 0) 
+    {
+        return false;
+    }
+
+    auto modules = reinterpret_cast<PRTL_PROCESS_MODULES>(buffer.data());
+
+    for (ULONG i = 0; i < modules->NumberOfModules; ++i) 
+    {
+        auto& module = modules->Modules[i];
+
+        std::string fullPathstr = reinterpret_cast<char*>(module.FullPathName);
+        std::string fileNamestr = reinterpret_cast<char*>(module.FullPathName + module.OffsetToFileName);
+
+        std::wstring fullPathwstr(fullPathstr.begin(), fullPathstr.end());
+        size_t pos = fullPathwstr.find(L"\\SystemRoot");
+        if (pos != std::string::npos)
+            fullPathwstr.replace(pos, wcslen(L"\\SystemRoot"), L"C:\\Windows");
+
+        std::wstring fileNamewstr(fileNamestr.begin(), fileNamestr.end());
+
+        systemModules.push_back(SystemModuleInfo{ fileNamewstr, fullPathwstr });
+    }
+
+    return true;
 }

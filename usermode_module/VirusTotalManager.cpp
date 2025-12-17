@@ -144,7 +144,6 @@ bool VirusTotalManager::AnalyseFileGetResult(std::string file_path, FileAnalysis
 
         return true;
     }
-
     
 
     DWORD status = -1;
@@ -159,7 +158,8 @@ bool VirusTotalManager::AnalyseFileGetResult(std::string file_path, FileAnalysis
     std::string analysisStatus;
     while (analysisStatus != "completed")
     {
-        this->GetFileAnalysisResult(analysisID, &response);
+        if (!this->GetFileAnalysisResult(analysisID, &response))
+            return false;
         data = nlohmann::json::parse(response);
         analysisStatus = data["data"]["attributes"]["status"];
         Sleep(500);
