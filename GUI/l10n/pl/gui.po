@@ -1,0 +1,98 @@
+# Polish translations for PACKAGE package
+# Polskie t³umaczenia dla pakietu PACKAGE.
+# Copyright (C) 2025 THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-12-17 21:11+0100\n"
+"PO-Revision-Date: 2025-12-16 15:49+0100\n"
+"Last-Translator: <EMAIL@ADDRESS>\n"
+"Language-Team: Polish\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CP1250\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 "
+"|| n%100>=20) ? 1 : 2);\n"
+
+#: ..\..\src\Main.cpp:21
+msgid "Couldn't find/load the 'gui' message catalog (language translations)."
+msgstr "Nie uda³o siê odnaleŸæ/za³adowaæ katalogu napisów 'gui' (t³umaczenia jêzykowe)"
+
+#: ..\..\src\Main.cpp:40
+msgid "Main GUI Window"
+msgstr "G³ówne okno aplikacji"
+
+#: ..\..\src\Main.cpp:60
+msgid "&Add a silly text panel"
+msgstr "&Dodaj panel z &g³upiutkim tekstem"
+
+#: ..\..\src\Main.cpp:62
+msgid "&Add filesystem scan panel"
+msgstr "&Dodaj panel skanu systemu &plików"
+
+#: ..\..\src\Main.cpp:67
+msgid "&Create new"
+msgstr "&Utwórz now¹"
+
+#: ..\..\src\Main.cpp:70
+msgid "&Restore perspective..."
+msgstr "&Przywróæ perspektywê..."
+
+#: ..\..\src\Main.cpp:71
+msgid "&Default"
+msgstr "&Domyœlna"
+
+#: ..\..\src\Main.cpp:71
+msgid "Restore the default GUI look"
+msgstr "Przywróæ domyœlny widok interfejsu"
+
+#: ..\..\src\Main.cpp:83
+msgid "&View"
+msgstr "&Widok"
+
+#: ..\..\src\Main.cpp:84
+msgid "&Perspectives"
+msgstr "&Perspektywy"
+
+#: ..\..\src\Main.cpp:88
+msgid "Im a silly text control"
+msgstr "Jestem g³upiutkim panelem tekstowym"
+
+#: ..\..\src\Main.cpp:88
+msgid "Silly pane 1"
+msgstr "G³upiutki panel 1"
+
+#: ..\..\src\Main.cpp:96
+msgid "Filesystem scan"
+msgstr "Skan systemu plików"
+
+#: ..\..\src\Main.cpp:137
+msgid "Perspective "
+msgstr "Perspektywa "
+
+#: ..\..\src\Panels.cpp:37
+msgid "Scan in progress..."
+msgstr "Trwa skanowanie..."
+
+#: ..\..\src\Panels.cpp:58
+msgid "Configure your scan settings"
+msgstr "Skonfiguruj ustawienia stanu"
+
+#: ..\..\src\Panels.cpp:62
+msgid "Setting 1: "
+msgstr "Ustawienie 1: "
+
+#: ..\..\src\Panels.cpp:66
+msgid "Launch"
+msgstr "Uruchom"
+
+#~ msgid "&Restore default"
+#~ msgstr "&Przywróæ domyœlny"
+
+#~ msgid "&Language"
+#~ msgstr "&Jêzyk"

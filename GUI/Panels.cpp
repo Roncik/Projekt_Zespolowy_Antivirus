@@ -34,7 +34,7 @@ ScanInProgressPanel::ScanInProgressPanel(wxWindow* parent) :
 	progressGauge->SetValue(0);
 
 	// Progress info text
-	wxStaticText* statusText = new wxStaticText(this, wxID_ANY, "Scan in progress...", wxDefaultPosition, wxDefaultSize);
+	wxStaticText* statusText = new wxStaticText(this, wxID_ANY, _("Scan in progress..."), wxDefaultPosition, wxDefaultSize);
 	wxTextCtrl* filesScannedText = new wxTextCtrl(this, wxID_ANY, "0", wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
 	
 	hbox->Add(progressGauge, 0, wxEXPAND | wxALL, 5);
@@ -55,15 +55,15 @@ LaunchScanPanel::LaunchScanPanel(wxWindow* parent) : wxPanel(parent)
 	wxBoxSizer* vbox = new wxBoxSizer(wxVERTICAL);
 
 	// Configuring contents
-	wxStaticText* text1 = new wxStaticText(this, wxID_ANY, "Configure your scan settings");
+	wxStaticText* text1 = new wxStaticText(this, wxID_ANY, _("Configure your scan settings"));
 	text1->SetFont(text1->GetFont().Scale(1.1));
 
 	wxBoxSizer* hbox = new wxBoxSizer(wxHORIZONTAL);
-	text2 = new wxStaticText(this, wxID_ANY, "Setting 1: ");
+	text2 = new wxStaticText(this, wxID_ANY, _("Setting 1: "));
 	wxRadioButton* choiceA = new wxRadioButton(this, wxID_ANY, "A", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
 	wxRadioButton* choiceB = new wxRadioButton(this, wxID_ANY, "B");
 
-	wxButton* launchButton = new wxButton(this, 3, "Launch");
+	wxButton* launchButton = new wxButton(this, 3, _("Launch"));
 
 	// Configuring sizers
 	vbox->Add(text1, 0, wxEXPAND | wxALL, 5);
