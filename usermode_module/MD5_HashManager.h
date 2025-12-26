@@ -1,18 +1,22 @@
 #pragma once
 class MD5_HashManager
 {
+private:
+    static constexpr size_t RECORD_SIZE = 34; //32 hexstring + \r + newline
+    static const DWORD READ_BUFFER_SIZE = 64 * 1024; // 64 KB
 public:
     struct Hash16
     {
         uint64_t hi; // bytes 0..7 as big-endian number
         uint64_t lo; // bytes 8..15 as big-endian number
 
-        // Construct from raw 16 bytes (byte[0] is most-significant)
+        // Construct from raw 16 bytes (byte[0] is most-significant) (BIG-ENDIAN)
         static Hash16 from_bytes(const unsigned char* b);
 
-        // Parse hex string (may contain whitespace). Return pair(success, Hash16)
+        // Parse hex string (may contain whitespace). Return pair(success, Hash16) (BIG-ENDIAN)
         static std::pair<bool, Hash16> from_hexstring(const std::string& s);
 
+        // (BIG-ENDIAN)
         std::string to_hexstring32(); 
 
 
@@ -30,8 +34,7 @@ public:
         }
     };
 
-    static constexpr size_t RECORD_SIZE = 34; //32 hexstring + \r + newline
-    static const DWORD READ_BUFFER_SIZE = 64 * 1024; // 64 KB
+    
 
     std::vector<Hash16> localHashDatabase;
 

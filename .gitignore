@@ -480,3 +480,6 @@ merged_hashes.txt
 
 # Old/unused files
 old_unused/
+
+# Local hash database for virustotal
+hashdb.txt

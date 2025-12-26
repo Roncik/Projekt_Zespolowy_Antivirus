@@ -1,21 +1,12 @@
 #pragma once
+#include "VirusTotalManager.h"
+#include "HTTPSManager.h"
+#include "MD5_HashManager.h"
+#include "ProcessManager.h"
 
 class VirusTotalManager
 {
-private:
-	std::wstring API_KEY;
-
 public:
-	VirusTotalManager(std::wstring API_KEY)
-	{
-		this->API_KEY = API_KEY;
-	}
-
-	~VirusTotalManager()
-	{
-		this->API_KEY.clear();
-	}
-
 	enum FileAnalysisResult : int8_t
 	{
 		UNDETECTED = 0,
@@ -24,6 +15,26 @@ public:
 		INVALID = 3
 	};
 
+private:
+	std::wstring API_KEY;
+	std::wstring hashDatabasePath;
+	std::map<MD5_HashManager::Hash16, FileAnalysisResult> localHashDatabase;
+
+public:
+	VirusTotalManager(std::wstring API_KEY, _In_opt_ std::wstring hashDatabasePath)
+	{
+		this->API_KEY = API_KEY;
+		if (hashDatabasePath.length() > 0)
+			this->hashDatabasePath = hashDatabasePath;
+		this->ReadLocalDatabase();
+	}
+
+	~VirusTotalManager()
+	{
+		this->API_KEY.clear();
+		this->localHashDatabase.clear();
+	}
+
 	bool QueryFileForAnalysis(std::string file_path, _Inout_opt_ std::vector<char>* outResponse, _Inout_opt_ DWORD* outStatusCode);
 
 	bool GetFileAnalysisResult(std::wstring analysisID, _Inout_opt_ std::vector<char>* outResponse);
@@ -31,5 +42,13 @@ public:
 	bool GetFileReport(std::wstring fileHashHexString, _Inout_opt_ std::vector<char>* outResponse);
 
 	bool AnalyseFileGetResult(std::string file_path, FileAnalysisResult& result);
+
+	bool SaveResultToLocalDatabase(MD5_HashManager::Hash16 Hash, VirusTotalManager::FileAnalysisResult fileAnalysisResult, bool updateMemory = true);
+
+	bool ReadLocalDatabase();
+
+	bool IsHashInLocalDatabase(MD5_HashManager::Hash16 hash, FileAnalysisResult& fileAnalysisResult);
+
+	bool ScanRunningProcessesAndDrivers();
 };
 

@@ -16,55 +16,75 @@ MD5_HashManager::Hash16 MD5_HashManager::Hash16::from_bytes(const unsigned char*
 
 pair<bool, MD5_HashManager::Hash16> MD5_HashManager::Hash16::from_hexstring(const string& s)
 {
-    unsigned char bytes[16];
-    int nibble_count = 0;
-    int byte_idx = 0;
-    int cur = 0;
-    bool have_hi_nibble = false;
-    for (char ch : s)
-    {
-        int v = -1;
-        if (ch >= '0' && ch <= '9') v = ch - '0';
-        else if (ch >= 'a' && ch <= 'f') v = 10 + (ch - 'a');
-        else if (ch >= 'A' && ch <= 'F') v = 10 + (ch - 'A');
-        else continue; // ignore whitespace/other
-        if (!have_hi_nibble)
-        {
-            cur = v << 4;
-            have_hi_nibble = true;
-        }
-        else
-        {
-            cur |= v;
-            if (byte_idx >= (int)16) return { false, {} };
-            bytes[byte_idx++] = (unsigned char)cur;
-            cur = 0;
-            have_hi_nibble = false;
-        }
+    // helper to convert a single hex digit to value or -1 if invalid
+    auto hexval = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+        return -1;
+        };
+
+    // remove whitespace
+    std::string filtered;
+    filtered.reserve(s.size());
+    for (unsigned char ch : s) {
+        if (!std::isspace(ch)) filtered.push_back(static_cast<char>(ch));
     }
-    if (byte_idx != (int)16)
-        return { false, {} };
-    return { true, from_bytes(bytes) };
+
+    // optional 0x/0X prefix
+    if (filtered.size() >= 2 && filtered[0] == '0' && (filtered[1] == 'x' || filtered[1] == 'X')) {
+        filtered.erase(0, 2);
+    }
+
+    // must be exactly 32 hex digits for an MD5 (16 bytes)
+    if (filtered.size() != 32) {
+        return { false, Hash16{} };
+    }
+
+    unsigned char bytes[16];
+    for (size_t i = 0; i < 16; ++i) {
+        int hi = hexval(filtered[2 * i]);
+        int lo = hexval(filtered[2 * i + 1]);
+        if (hi < 0 || lo < 0) {
+            return { false, Hash16{} };
+        }
+        bytes[i] = static_cast<unsigned char>((hi << 4) | lo);
+    }
+
+    // interpret bytes[0..7] as big-endian into hi, bytes[8..15] as big-endian into lo
+    uint64_t hi64 = 0;
+    for (size_t i = 0; i < 8; ++i) {
+        hi64 = (hi64 << 8) | uint64_t(bytes[i]);
+    }
+    uint64_t lo64 = 0;
+    for (size_t i = 8; i < 16; ++i) {
+        lo64 = (lo64 << 8) | uint64_t(bytes[i]);
+    }
+
+    Hash16 h;
+    h.hi = hi64;
+    h.lo = lo64;
+    return { true, h };
 }
 
 std::string MD5_HashManager::Hash16::to_hexstring32()
 {
     static const char hex[] = "0123456789abcdef";
     std::string out;
-    out.resize(32);
+    out.reserve(32);
 
-    // For hi: emit bytes LSB first (i = 0 => least-significant byte)
-    for (int i = 0; i < 8; ++i) {
-        uint8_t byte = static_cast<uint8_t>((hi >> (i * 8)) & 0xFFu);
-        out[2 * i] = hex[(byte >> 4) & 0xF];
-        out[2 * i + 1] = hex[byte & 0xF];
+    // hi: bytes 0..7 (most-significant first)
+    for (int i = 7; i >= 0; --i) {
+        unsigned int byte = static_cast<unsigned int>((hi >> (i * 8)) & 0xFFu);
+        out.push_back(hex[byte >> 4]);
+        out.push_back(hex[byte & 0x0F]);
     }
 
-    // For lo: same (LSB first), placed after the first 16 hex chars
-    for (int i = 0; i < 8; ++i) {
-        uint8_t byte = static_cast<uint8_t>((lo >> (i * 8)) & 0xFFu);
-        out[16 + 2 * i] = hex[(byte >> 4) & 0xF];
-        out[16 + 2 * i + 1] = hex[byte & 0xF];
+    // lo: bytes 8..15 (most-significant first)
+    for (int i = 7; i >= 0; --i) {
+        unsigned int byte = static_cast<unsigned int>((lo >> (i * 8)) & 0xFFu);
+        out.push_back(hex[byte >> 4]);
+        out.push_back(hex[byte & 0x0F]);
     }
 
     return out;
@@ -214,6 +234,10 @@ bool MD5_HashManager::computeFileMd5(_In_opt_ HCRYPTPROV hProv, const std::wstri
     }
 
     memcpy(&outHex, hashBytes.data(), hashLen);
+
+    //Convert output to big-endian from little-endian
+    outHex.hi = _byteswap_uint64(outHex.hi);
+    outHex.lo = _byteswap_uint64(outHex.lo);
 
     CryptDestroyHash(hHash);
     if (!hProv)

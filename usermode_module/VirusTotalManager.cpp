@@ -1,7 +1,5 @@
 #include "pch.h"
 #include "VirusTotalManager.h"
-#include "HTTPSManager.h"
-#include "MD5_HashManager.h"
 
 bool VirusTotalManager::QueryFileForAnalysis(std::string file_path, _Inout_opt_ std::vector<char>* outResponse, _Inout_opt_ DWORD* outStatusCode)
 {
@@ -171,6 +169,171 @@ bool VirusTotalManager::AnalyseFileGetResult(std::string file_path, FileAnalysis
         result = VirusTotalManager::FileAnalysisResult::SUSPICIOUS;
     else
         result = VirusTotalManager::FileAnalysisResult::UNDETECTED;
+
+    return true;
+}
+
+bool VirusTotalManager::SaveResultToLocalDatabase(MD5_HashManager::Hash16 Hash, VirusTotalManager::FileAnalysisResult fileAnalysisResult, bool updateMemory)
+{
+    /*if (!std::filesystem::exists(this->hashDatabasePath)) 
+        return false;*/
+    
+    std::ofstream database(this->hashDatabasePath, std::ios_base::app);
+    if (!database)
+        return false;
+
+    database << Hash.to_hexstring32() << ";" << std::to_string(fileAnalysisResult) << "\n"; //entry size = 35bytes
+    database.close();
+    
+    if (updateMemory)
+        this->localHashDatabase[Hash] = fileAnalysisResult;
+
+    return true;
+}
+
+bool VirusTotalManager::ReadLocalDatabase()
+{
+    if (!std::filesystem::exists(this->hashDatabasePath))
+        return false;
+
+    this->localHashDatabase.clear();
+
+    std::ifstream database(this->hashDatabasePath, std::ios::binary | std::ios::ate);
+    if (!database)
+        return false;
+
+    std::streamsize fileSize = database.tellg();
+    if (fileSize < 0)
+        return false;
+
+    static const uint8_t entrySize = 36; //hexstring32 + ';' + uint8_t + \n + \r
+    size_t numOfEntries = static_cast<size_t>(fileSize / entrySize);
+    database.seekg(0, std::ios::beg); //set cursor to 0
+    this->localHashDatabase.clear();
+    const size_t BUF_SIZE = entrySize * 50000; // 50000 entries at a time
+    std::vector<BYTE> buffer(BUF_SIZE);
+
+    size_t remainingEntries = numOfEntries;
+    while (remainingEntries)
+    {
+        size_t toread_recs = min(remainingEntries, BUF_SIZE / entrySize);
+        size_t toread = toread_recs * entrySize;
+        database.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(toread));
+        if (!database)
+            return false;
+        
+        for (size_t i = 0; i < toread_recs; ++i)
+        {
+            std::string entry(entrySize + 1, '\0');
+            memcpy(entry.data(), buffer.data() + i * entrySize, entrySize);
+
+            MD5_HashManager::Hash16 hash = MD5_HashManager::Hash16::from_hexstring(entry.substr(0, 32)).second;
+            std::string backtostr = hash.to_hexstring32();
+            VirusTotalManager::FileAnalysisResult analysisResult = static_cast<VirusTotalManager::FileAnalysisResult>(std::stoi(entry.substr(33, 1)));
+
+            this->localHashDatabase[hash] = analysisResult;
+        }
+
+        remainingEntries -= toread_recs;
+    }
+    return true;
+}
+
+bool VirusTotalManager::IsHashInLocalDatabase(MD5_HashManager::Hash16 hash, FileAnalysisResult& fileAnalysisResult)
+{
+    auto it = this->localHashDatabase.find(hash);
+    if (it == this->localHashDatabase.end())
+        return false;
+
+    fileAnalysisResult = it->second;
+    return true;
+}
+
+bool VirusTotalManager::ScanRunningProcessesAndDrivers()
+{
+    ProcessManager procmgr;
+    std::vector<ProcessManager::ProcessInfo> processes;
+    std::vector<ProcessManager::SystemModuleInfo> systemModules;
+    procmgr.GetAllProcesses(processes);
+    procmgr.GetAllSystemModules(systemModules);
+
+    MD5_HashManager hashmgr;
+
+
+    for (auto& process : processes)
+    {
+        std::wstring processPath;
+        if (!procmgr.GetProcessImagePath(reinterpret_cast<DWORD>(process.processID), processPath))
+        {
+            std::wcout << L"Failed getting path for process: " << process.processName << L"\n";
+            continue;
+        }
+
+        MD5_HashManager::Hash16 processFileHash;
+        if (!hashmgr.computeFileMd5(NULL, processPath, processFileHash))
+        {
+            std::wcout << L"Failed getting hash for process: " << process.processName << L"\n";
+            continue;
+        }
+
+        VirusTotalManager::FileAnalysisResult result;
+
+        std::wcout << L"Now scanning: " << process.processName << L" - ";
+        if (!this->IsHashInLocalDatabase(processFileHash, result)) //file was already scanned before
+        {
+            std::string processPathStr(processPath.begin(), processPath.end());
+
+
+            if (!this->AnalyseFileGetResult(processPathStr, result))
+            {
+                std::wcout << L"file analysis failed\n";
+                continue;
+            }
+            this->SaveResultToLocalDatabase(processFileHash, result, true);
+        }
+
+        if (result == VirusTotalManager::FileAnalysisResult::MALICIOUS)
+            std::wcout << L"file is malicious\n";
+        else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
+            std::wcout << L"file is suspicious\n";
+        else
+            std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
+    }
+
+    for (auto& systemModule : systemModules)
+    {
+        std::wstring Path = systemModule.filePath;
+
+
+        MD5_HashManager::Hash16 processFileHash;
+        if (!hashmgr.computeFileMd5(NULL, Path, processFileHash))
+        {
+            std::wcout << L"Failed getting hash for process: " << systemModule.fileName << L"\n";
+            continue;
+        }
+
+        VirusTotalManager::FileAnalysisResult result;
+
+        std::wcout << L"Now scanning: " << systemModule.fileName << L" - ";
+        if (!this->IsHashInLocalDatabase(processFileHash, result))
+        {
+            std::string processPathStr(Path.begin(), Path.end());
+
+            if (!this->AnalyseFileGetResult(processPathStr, result))
+            {
+                std::wcout << L"file analysis failed\n";
+                continue;
+            }
+            this->SaveResultToLocalDatabase(processFileHash, result, true);
+        }
+
+        if (result == VirusTotalManager::FileAnalysisResult::MALICIOUS)
+            std::wcout << L"file is malicious\n";
+        else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
+            std::wcout << L"file is suspicious\n";
+        else
+            std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
+    }
 
     return true;
 }
