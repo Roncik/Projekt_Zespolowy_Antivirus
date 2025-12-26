@@ -228,7 +228,6 @@ bool VirusTotalManager::ReadLocalDatabase()
             memcpy(entry.data(), buffer.data() + i * entrySize, entrySize);
 
             MD5_HashManager::Hash16 hash = MD5_HashManager::Hash16::from_hexstring(entry.substr(0, 32)).second;
-            std::string backtostr = hash.to_hexstring32();
             VirusTotalManager::FileAnalysisResult analysisResult = static_cast<VirusTotalManager::FileAnalysisResult>(std::stoi(entry.substr(33, 1)));
 
             this->localHashDatabase[hash] = analysisResult;
