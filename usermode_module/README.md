@@ -1,6 +1,12 @@
 # Project for the usermode functionalities of the antivirus software
 
-This project uses Direct3D9 for the Graphical User Interface.
+## External Dependencies
+
+This project uses Direct3D9 for the Graphical User Interface so you need:
+
+[DirectX Software Development Kit](https://www.microsoft.com/en-us/download/details.aspx?id=6812)
+
+[DirectX End-User Runtimes](https://www.microsoft.com/en-us/download/details.aspx?id=8109)
 
 ## 3.1 FileScanner
 
