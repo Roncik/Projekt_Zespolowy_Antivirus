@@ -260,6 +260,7 @@ bool ProcessManager::GetAllProcesses(std::vector<ProcessInfo>& processes)
     BYTE* ptr = buffer.data();
     const BYTE* bufferEnd = buffer.data() + buffer.size();
 
+    processes.clear();
     while (ptr < bufferEnd) 
     {
         SYSTEM_PROCESS_INFORMATION* spi = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>(ptr);
@@ -333,6 +334,7 @@ bool ProcessManager::GetAllSystemModules(std::vector<SystemModuleInfo>& systemMo
 
     auto modules = reinterpret_cast<PRTL_PROCESS_MODULES>(buffer.data());
 
+    systemModules.clear();
     for (ULONG i = 0; i < modules->NumberOfModules; ++i) 
     {
         auto& module = modules->Modules[i];

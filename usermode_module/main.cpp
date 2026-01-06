@@ -5,6 +5,7 @@
 #include "HTTPSManager.h"
 #include "VirusTotalManager.h"
 #include "ProcessManager.h"
+#include "ImGUIManager.h"
 
 int main()
 {
@@ -136,10 +137,12 @@ int main()
     //    std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
 
     //Virustotal scan all running processes's file's and loaded system modules
-    VirusTotalManager vtmgr = VirusTotalManager(L"c164bc01db151497cc74f370c2b8d4f41d020d79030db9b9db7eca737869e99e", L"hashdb.txt"); //VirusTotal API key https://www.virustotal.com/gui/my-apikey 
-    vtmgr.ScanRunningProcessesAndDrivers();
+    //VirusTotalManager vtmgr = VirusTotalManager(L"c164bc01db151497cc74f370c2b8d4f41d020d79030db9b9db7eca737869e99e", L"hashdb.txt"); //VirusTotal API key https://www.virustotal.com/gui/my-apikey 
+    //vtmgr.ScanRunningProcessesAndDrivers();
     
-    
+    //Run Imgui example
+    ImGUIManager imguimgr;
+    imguimgr.example();
 
 
     return 0;

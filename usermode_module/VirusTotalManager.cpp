@@ -253,8 +253,17 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers()
     ProcessManager procmgr;
     std::vector<ProcessManager::ProcessInfo> processes;
     std::vector<ProcessManager::SystemModuleInfo> systemModules;
-    procmgr.GetAllProcesses(processes);
-    procmgr.GetAllSystemModules(systemModules);
+    if (!procmgr.GetAllProcesses(processes))
+    {
+        std::wcout << L"Failed getting processes!\n";
+        return false;
+    }
+
+    if (!procmgr.GetAllSystemModules(systemModules))
+    {
+        std::wcout << L"Failed getting system modules!\n";
+        return false;
+    }
 
     MD5_HashManager hashmgr;
 

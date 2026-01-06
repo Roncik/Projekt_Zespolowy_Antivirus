@@ -25,9 +25,9 @@
 #include <cctype>
 #include <stdexcept>
 #include <winhttp.h>
-
-// Library for json - https://github.com/nlohmann/json
-#include "nlohmann/json.hpp"
+#include <d3d9.h>
+#include <d3dx9.h>
+#include <tchar.h>
 
 #pragma comment(lib, "Psapi.lib")
 #pragma comment(lib, "Wintrust.lib")
@@ -37,4 +37,17 @@
 #pragma comment(lib, "wldap32.lib")
 #pragma comment(lib, "secur32.lib")
 #pragma comment(lib, "winhttp.lib")
+#pragma comment(lib, "d3d9.lib")
+#pragma comment(lib, "d3dx9.lib")
+
+// Library for json - https://github.com/nlohmann/json
+#include "nlohmann/json.hpp"
+
+// ImGUI - https://github.com/ocornut/imgui
+#define IMGUI_DEFINE_MATH_OPERATORS
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_dx9.h"
+#include "imgui/imgui_impl_win32.h"
+
+
 

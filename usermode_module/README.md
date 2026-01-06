@@ -1,5 +1,7 @@
 # Project for the usermode functionalities of the antivirus software
 
+This project uses Direct3D9 for the Graphical User Interface.
+
 ## 3.1 FileScanner
 
 ### FileScanner Class
@@ -30,6 +32,7 @@ Provides methods:
 - **DevicePathToDosPath** - converts device path to DOS path.
 - **IsExecuteProtection, IsWritableExecutable** - checks page protection mask properties.
 - **GetAllProcesses** - uses NtQuerySystemInformation to enumerate all running processes in the system.
+- **GetAllSystemModules** - uses NtQuerySystemInformation to enumerate all loaded system modules.
 
 ### PrivilegeManager Class
 Provides method for enabling debug privilege on current process
@@ -44,3 +47,12 @@ Provides methods for analysing files using the VirusTotal api(via https requests
 
 ### HTTPSManager Class
 Provides methods for sending HTTPS requests using windows's WINHTTP library
+
+## ImGUIManager Class
+Contains static members for the Direct3D9 such as device and parameters for later use by GUI.
+
+Provides methods:
+- **CreateDeviceD3D** - Creates a Direct3D9 device for later use.
+- **CleanupDeviceD3D** - Clear the D3D9 device.
+- **ResetDevice** - Reset the D3D9 device.
+- **WndProc** - Callback for handling messages sent to the GUI window. Tries ImGUI callback first, if it fails it falls back to default handler.
