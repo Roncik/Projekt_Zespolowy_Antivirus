@@ -31,6 +31,9 @@
     <Filter Include="ImGUI\Dependencies">
       <UniqueIdentifier>{9889a712-3c1e-4f7e-af6e-052ae4e4ec11}</UniqueIdentifier>
     </Filter>
+    <Filter Include="LogsManager">
+      <UniqueIdentifier>{53621b90-49ee-412a-ad21-4a2f7fbb2de5}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -87,6 +90,9 @@
     <ClCompile Include="ImGUIManager.cpp">
       <Filter>ImGUI</Filter>
     </ClCompile>
+    <ClCompile Include="LogsManager.cpp">
+      <Filter>LogsManager</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -142,6 +148,9 @@
     </ClInclude>
     <ClInclude Include="ImGUIManager.h">
       <Filter>ImGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="LogsManager.h">
+      <Filter>LogsManager</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

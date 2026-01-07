@@ -483,3 +483,6 @@ old_unused/
 
 # Local hash database for virustotal
 hashdb.txt
+
+# Logs database
+logs.txt
