@@ -1,5 +1,10 @@
 #include "pch.h"
 #include "ImGUIManager.h"
+#include "TemporaryHelpers.h"
+#include <mutex>
+#include <thread>
+#include <vector>
+//#include <chrono>
 
 //static member definitions
  LPDIRECT3D9              ImGUIManager::g_pD3D = nullptr;
@@ -79,16 +84,30 @@ LRESULT __stdcall ImGUIManager::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
     }
 }
 
-int ImGUIManager::example()
+// Data shared between different functions of the main window
+struct MainWindowData
+{
+    // Panels (child windows of the main window)
+    bool showActiveProtectionConfigPanel = false;
+    //bool showActiveProtectionConsoleOutputPanel = false; // its just the logger example despite the name
+    bool showActiveProtectionOutputPanel = false;
+};
+
+// Needed for antivirus scan module and GUI integration
+static std::vector<std::wstring> outputLines;
+static std::mutex oL_mutex;
+
+// Run the main window
+int ImGUIManager::RunUI()
 {
     // Make process DPI aware and obtain main monitor scale
     ImGui_ImplWin32_EnableDpiAwareness();
     float main_scale = ImGui_ImplWin32_GetDpiScaleForMonitor(::MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY));
 
     // Create application window
-    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, this->WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
+    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, this->WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"Antivirus Student Project", nullptr };
     ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Dear ImGui DirectX9 Example", WS_OVERLAPPEDWINDOW, 100, 100, (int)(1280 * main_scale), (int)(800 * main_scale), nullptr, nullptr, wc.hInstance, nullptr);
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Antivirus Student Project", WS_OVERLAPPEDWINDOW, 100, 100, (int)(800 * main_scale), (int)(600 * main_scale), nullptr, nullptr, wc.hInstance, nullptr);
 
     // Initialize Direct3D
     if (!CreateDeviceD3D(hwnd))
@@ -102,12 +121,17 @@ int ImGUIManager::example()
     ::ShowWindow(hwnd, SW_SHOWDEFAULT);
     ::UpdateWindow(hwnd);
 
+    // Window data
+    static MainWindowData mwData;
+
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGuiIO& io = ImGui::GetIO(); (void)io;                   
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable window/panel docking
+    io.ConfigFlags |= ImGuiWindowFlags_NoMove;                // Main panel non-movable    
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -190,63 +214,68 @@ int ImGUIManager::example()
         ImGui_ImplDX9_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
-        ImGui::SetNextWindowPos({ 0,0 }, ImGuiCond_Once);
-        ImGui::SetNextWindowSize({ (1280 * main_scale), (800 * main_scale) });
-        ImGui::SetNextWindowBgAlpha(1.0f);
+        ImGui::DockSpaceOverViewport();
+        //ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);    // Transparent dockspace
 
-        if (ImGui::Begin("Main window", 0,
-            ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoSavedSettings |
-            ImGuiWindowFlags_NoCollapse |
-            ImGuiWindowFlags_NoScrollbar |
-            ImGuiWindowFlags_NoTitleBar |
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_MenuBar))
+        if (mwData.showActiveProtectionConfigPanel) 
         {
-            if (ImGui::BeginMenuBar())
-            {
-                if (ImGui::BeginMenu("scanner"))
-                {
-                    ImGui::Text("some text");
-                    
-                    ImGui::EndMenu();
-                }
-                
-                ImGui::EndMenuBar();
-            }
-            
-            
-            
-            /*ImGui::SetCursorPos({ 0,0 });
-            if (ImGui::BeginChild(1, { (1280 * main_scale), (50 * main_scale) }))
-            {
-                float offset_to_next_button = 0.f;
-
-                ImGui::SetCursorPos({ offset_to_next_button,0 });
-                if (ImGui::Button("Scanner", { (80 * main_scale), (50 * main_scale) }))
-                    main_nav_bar = 0;
-                offset_to_next_button += 80.f;
-
-
-                ImGui::SetCursorPos({ offset_to_next_button,0 });
-                if (ImGui::Button("Active\nScanning", { (80 * main_scale), (50 * main_scale) }))
-                    main_nav_bar = 1;
-                offset_to_next_button += 80.f;
-            }
-            ImGui::EndChild();*/
-
+            ShowActiveProtectionConfigPanel(&mwData.showActiveProtectionConfigPanel); 
         }
-        ImGui::End();
+        if (mwData.showActiveProtectionOutputPanel)
+        {
+            ShowActiveProtectionOutputPanel(&mwData.showActiveProtectionOutputPanel);
+        }
+        /*  if (mwData.showActiveProtectionConsoleOutputPanel)
+        {
+            ShowExampleAppLog(&mwData.showActiveProtectionConsoleOutputPanel);
+        }*/
 
+        //ImGui::SetNextWindowPos({ 0,0 }, ImGuiCond_Once);
+        //ImGui::SetNextWindowSize({ (1280 * main_scale), (800 * main_scale) });
+        //ImGui::SetNextWindowBgAlpha(1.0f);
 
+        // flags for imgui begin main window
+        //ImGuiWindowFlags_NoResize |
+        //    ImGuiWindowFlags_NoSavedSettings |
+        //    ImGuiWindowFlags_NoCollapse |
+        //    ImGuiWindowFlags_NoScrollbar |
+        //    ImGuiWindowFlags_NoTitleBar |
+        //    ImGuiWindowFlags_MenuBar
 
+        // Create the always-visible main menu bar over the main viewport
+        if (ImGui::BeginMainMenuBar())
+        {
+            if (ImGui::BeginMenu("View"))
+            {             
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Panels"))
+            {
+                if (ImGui::MenuItem("Active protection config", NULL))                
+                    mwData.showActiveProtectionConfigPanel = true;                
+                /*if (ImGui::MenuItem("Active protection console output", NULL))                
+                    mwData.showActiveProtectionConsoleOutputPanel = true;*/
+                if (ImGui::MenuItem("Active protection console output", NULL))
+                    mwData.showActiveProtectionOutputPanel = true;
+                
+                // example on how to program a menu
+                //if (ImGui::MenuItem("Undo", "Ctrl+Z")) {}
+                //if (ImGui::MenuItem("Redo", "Ctrl+Y", false, false)) {} // Disabled item
+                //ImGui::Separator();
+                //if (ImGui::MenuItem("Cut", "Ctrl+X")) {}
+                //if (ImGui::MenuItem("Copy", "Ctrl+C")) {}
+                //if (ImGui::MenuItem("Paste", "Ctrl+V")) {}
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
+          /* if (show_demo_window)
+                ImGui::ShowDemoWindow(&show_demo_window);*/
 
-        //// 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-        //{
+        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+        {//
         //    static float f = 0.0f;
         //    static int counter = 0;
 
@@ -266,17 +295,17 @@ int ImGUIManager::example()
 
         //    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
         //    ImGui::End();
-        //}
+        }
 
-        //// 3. Show another simple window.
-        //if (show_another_window)
+        // 3. Show another simple window.        
+        {//if (show_another_window)
         //{
         //    ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
         //    ImGui::Text("Hello from another window!");
         //    if (ImGui::Button("Close Me"))
         //        show_another_window = false;
         //    ImGui::End();
-        //}
+        }
 
         // Rendering
         ImGui::EndFrame();
@@ -306,4 +335,75 @@ int ImGUIManager::example()
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
 
     return 0;
+}
+
+void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open) 
+{    
+    ImGui::SetNextWindowSize(ImVec2(80, 160), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Active protection config", p_open))
+    {        
+        ImGui::SetNextItemWidth(65);
+        ImGui::TextWrapped("Run modules");
+                
+        static bool scanRunning = false;    // Initialize only at first pass of this line
+        static std::mutex sR_mutex;                    
+
+        ImGui::TextWrapped("Integrity check"); 
+        ImGui::SameLine(); 
+        if (ImGui::Button("Run")) 
+        {
+            std::unique_lock<std::mutex> sR_lock(sR_mutex);
+            if (!scanRunning)
+            {                
+                sR_lock.unlock();
+                std::thread(moduleDeployer::runIntegrityCheck, &scanRunning, std::ref(sR_mutex), std::ref(oL_mutex), std::ref(outputLines)).detach();
+            }          
+        }        
+    }
+    ImGui::End();
+}
+
+// Helper to convert from wstring to string
+std::string convert_from_wstring(const std::wstring& wstr)
+{
+    int num_chars = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), wstr.length(), NULL, 0, NULL, NULL);
+    std::string strTo;
+    if (num_chars > 0)
+    {
+        strTo.resize(num_chars);
+        WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), wstr.length(), &strTo[0], num_chars, NULL, NULL);
+    }
+    return strTo;
+}
+
+// Communicates with a worker runIntegrityCheck thread, checking a shared vector
+// for new elements (new lines output by the scanning module) and updating the UI text field
+void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
+{
+    ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Active protection output", p_open))
+    {
+        ImGui::Text("Console output of running active protection modules.");
+
+        static ImGuiTextBuffer consoleOutput;  
+        static int lines = 0;
+
+        if (ImGui::Button("Clear")) { consoleOutput.clear(); lines = 0; }               
+        ImGui::SameLine();
+        if (ImGui::Button("Add text")) { consoleOutput.appendf("%i The quick brown fox jumps over the lazy dog\n", ++lines); }
+
+        std::unique_lock<std::mutex> oL_lock(oL_mutex);
+            if (outputLines.size() > 0)
+            {
+                for (std::wstring line : outputLines)
+                    consoleOutput.appendf(convert_from_wstring(line).c_str());
+                outputLines.clear();
+            }
+        oL_lock.unlock();
+
+        ImGui::BeginChild("Output field");                       
+        ImGui::TextUnformatted(consoleOutput.begin(), consoleOutput.end());        
+        ImGui::EndChild();
+    }
+    ImGui::End();
 }

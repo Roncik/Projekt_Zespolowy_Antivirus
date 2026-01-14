@@ -90,8 +90,8 @@
     <ClCompile Include="ImGUIManager.cpp">
       <Filter>ImGUI</Filter>
     </ClCompile>
-    <ClCompile Include="LogsManager.cpp">
-      <Filter>LogsManager</Filter>
+    <ClCompile Include="TemporaryHelpers.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -149,8 +149,8 @@
     <ClInclude Include="ImGUIManager.h">
       <Filter>ImGUI</Filter>
     </ClInclude>
-    <ClInclude Include="LogsManager.h">
-      <Filter>LogsManager</Filter>
+    <ClInclude Include="TemporaryHelpers.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

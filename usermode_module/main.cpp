@@ -6,7 +6,7 @@
 #include "VirusTotalManager.h"
 #include "ProcessManager.h"
 #include "ImGUIManager.h"
-#include "LogsManager.h"
+//#include "LogsManager.h"
 
 int main()
 {
@@ -155,10 +155,10 @@ int main()
         //vtmgr.ScanRunningProcessesAndDrivers();
     }
     
-    //Run Imgui example
+    //Run Imgui window
     {
         ImGUIManager imguimgr;
-        imguimgr.example();
+        imguimgr.RunUI();
     }
 
     //Logger test
