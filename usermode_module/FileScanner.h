@@ -1,5 +1,6 @@
 #pragma once
 #include "MD5_HashManager.h"
+#include "LogsManager.h"
 
 class FileScanner
 {
@@ -8,6 +9,7 @@ private:
     std::vector<MD5_HashManager::Hash16> MD5HashBlacklist;
     std::mutex coutMutex;
     std::vector<std::thread> threads;
+    static const std::string LogModuleName;
 
 public:
     //Scan files in the specified directory and all its subdirectories against a MD5 blacklist

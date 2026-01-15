@@ -49,7 +49,7 @@ int main()
 
     //Scan System32 processes for code signatures
     {
-        /*SystemProcessDefender spd;
+       /* SystemProcessDefender spd;
         std::pair<std::string, std::wstring> exampleSig("48 B8 ? ? ? ? ? ? ? ? FF E0", L"hook_sig1");
         std::vector<std::pair<std::string, std::wstring>> exampleSigsVector;
         exampleSigsVector.push_back(exampleSig);

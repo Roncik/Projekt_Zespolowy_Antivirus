@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "SystemProcessDefender.h"
 
+//static member definitions
+const std::string SystemProcessDefender::LogModuleName = "System Process Guard"; // System Process Guard
+
 bool SystemProcessDefender::VerifyEmbeddedSignature(const std::wstring& filePath)
 {
     WINTRUST_FILE_INFO fileInfo = { 0 };
@@ -265,6 +268,49 @@ bool SystemProcessDefender::CompareImageSectionsWithDisk(DWORD pid, std::vector<
     return true;
 }
 
+bool SystemProcessDefender::DiskMemoryIntegrityCheckSystemProcesses()
+{
+
+    std::vector<SystemProcessDefender::SystemProcessInfo> systemProcesses;
+    std::vector<SystemProcessDefender::SystemProcessInfo> system32NonSystemUsers;
+    this->GetSystem32Processes(systemProcesses, system32NonSystemUsers);
+
+    std::vector<SystemProcessDefender::SystemProcessInfo> allSystem32Processes = systemProcesses;
+    allSystem32Processes.insert(allSystem32Processes.end(), system32NonSystemUsers.begin(), system32NonSystemUsers.end());
+    LogsManager logsManager;
+    for (auto& process : allSystem32Processes)
+    {
+        std::vector<SystemProcessDefender::SectionMismatch> sectionMismatches;
+        std::wstring mainModulePath;
+        this->CompareImageSectionsWithDisk(process.pid, sectionMismatches, mainModulePath);
+        for (auto& sectionMismatch : sectionMismatches)
+        {
+            std::wstringstream extra_info; 
+            extra_info << L"Mismatch in section: " << sectionMismatch.sectionName << L"at offset: " << sectionMismatch.offsetInSection << L"\nExpected bytes:";
+            for (auto& byte : sectionMismatch.expected)
+                extra_info << L" " << std::hex << byte;
+            extra_info << L"\nActual bytes:";
+            for (auto& byte : sectionMismatch.actual)
+                extra_info << L" " << std::hex << byte;
+            std::wstring extra_info_wstr = extra_info.str();
+
+            std::wstring processname = process.path.substr(process.path.find_last_of('\\'));
+
+            LogsManager::log_entry logentry;
+            logentry.Type = "Memory anomaly";
+            logentry.Module_name = SystemProcessDefender::LogModuleName;
+            logentry.Filename = std::string(processname.begin(), processname.end());
+            logentry.Location = std::string(process.path.begin(), process.path.end());
+            logentry.Description = "Code in this process was modified during runtime, this could indicate that it was tampered with.";
+            logentry.Extra_info = std::string(extra_info_wstr.begin(), extra_info_wstr.end());
+
+            LogsManager::Log(logentry);
+        }
+    }
+
+    return true;
+}
+
 // Scan memory for list of signatures (vector of pair(hexPattern, name)) hexPattern - ascii hex bytes, spaces allowed, '?' wildcard allowed
 /*
 Example signature:
@@ -330,6 +376,50 @@ bool SystemProcessDefender::ScanExecutableMemoryForSignatures(DWORD pid, const s
 
     CloseHandle(handleProcess);
     return true;
+}
+
+bool SystemProcessDefender::ScanAllProcessesForBlacklistedSignatures()
+{
+    std::pair<std::string, std::wstring> exampleSig("48 B8 ? ? ? ? ? ? ? ? FF E0", L"hook_sig1");
+    SignatureManager::AddCodeSignatureToDatabase(exampleSig);
+
+    std::vector<ProcessManager::ProcessInfo> processes;
+    if (!ProcessManager::GetAllProcesses(processes))
+        return false;
+
+    for (auto& process : processes)
+    {
+        std::wstring filePath; 
+        ProcessManager::GetProcessImagePath(reinterpret_cast<DWORD>(process.processID), filePath);
+        
+        std::vector<SystemProcessDefender::SignatureHit> sigHits;
+        if (!this->ScanExecutableMemoryForSignatures(reinterpret_cast<DWORD>(process.processID), SignatureManager::CodeSignatureDatabase, sigHits))
+        {
+            LogsManager::log_entry logentry;
+            logentry.Type = "Error";
+            logentry.Module_name = SystemProcessDefender::LogModuleName;
+            logentry.Filename = std::string(process.processName.begin(), process.processName.end());
+            logentry.Description = "Failed to scan this file for code signature scan";
+
+            LogsManager::Log(logentry);
+            continue;
+        }
+        for (auto& sigHit : sigHits)
+        {
+            std::ostringstream extra_info_ss;
+            extra_info_ss << "Signature " << std::string(sigHit.name.begin(), sigHit.name.end()) << " was found at an address: " << std::hex << sigHit.address;
+
+            LogsManager::log_entry logentry;
+            logentry.Type = "Memory anomaly";
+            logentry.Module_name = SystemProcessDefender::LogModuleName;
+            logentry.Filename = std::string(process.processName.begin(), process.processName.end());
+            logentry.Location = std::string(filePath.begin(), filePath.end());
+            logentry.Description = "A blacklisted code signature was found in this process";
+            logentry.Extra_info = extra_info_ss.str();
+
+            LogsManager::Log(logentry);
+        }
+    }
 }
 
 // Check each thread's current instruction pointer and verify it's inside an executable section of main module.
@@ -479,6 +569,54 @@ bool SystemProcessDefender::CheckThreadsExecution(DWORD pid, std::vector<ThreadS
     return true;
 }
 
+bool SystemProcessDefender::ScanSystemProcessesThreadsSuspiciousExecution()
+{
+    std::vector<SystemProcessDefender::SystemProcessInfo> systemProcesses;
+    std::vector<SystemProcessDefender::SystemProcessInfo> system32NonSystemUsers;
+    this->GetSystem32Processes(systemProcesses, system32NonSystemUsers);
+
+    std::vector<SystemProcessDefender::SystemProcessInfo> allSystem32Processes = systemProcesses;
+    allSystem32Processes.insert(allSystem32Processes.end(), system32NonSystemUsers.begin(), system32NonSystemUsers.end());
+    for (auto& process : allSystem32Processes)
+    {
+        std::vector<SystemProcessDefender::ThreadSuspicious> outSuspiciousThreads;
+        if (!this->CheckThreadsExecution(process.pid, outSuspiciousThreads))
+        {
+            std::wstring filenamewstr = process.path.substr(process.path.find_last_of('\\'));
+            
+            LogsManager::log_entry logentry;
+            logentry.Type = "Error";
+            logentry.Module_name = SystemProcessDefender::LogModuleName;
+            logentry.Filename = std::string(filenamewstr.begin(), filenamewstr.end());
+            logentry.Location = std::string(process.path.begin(), process.path.end());
+            logentry.Description = "Failed to scan this system process's threads for suspicious execution";
+
+            LogsManager::Log(logentry);
+            continue;
+        }
+
+        for (auto& suspiciousThread : outSuspiciousThreads)
+        {
+            std::wstring filenamewstr = process.path.substr(process.path.find_last_of('\\'));
+
+            std::ostringstream extra_info_ss;
+            extra_info_ss << "Thread with ID: " << suspiciousThread.threadID << " was found to be executing memory at: " << std::hex << suspiciousThread.instructionPointer << ". This memory address is outside of original executable memory ranges.";
+
+            LogsManager::log_entry logentry;
+            logentry.Type = "Memory anomaly";
+            logentry.Module_name = SystemProcessDefender::LogModuleName;
+            logentry.Filename = std::string(filenamewstr.begin(), filenamewstr.end());
+            logentry.Location = std::string(process.path.begin(), process.path.end());
+            logentry.Description = "A thread of this process was detected to be executing code outside its original code address space";
+            logentry.Extra_info = extra_info_ss.str();
+
+            LogsManager::Log(logentry);
+        }
+    }
+    
+    return false;
+}
+
 bool SystemProcessDefender::FindSuspiciousExecutableAllocations(DWORD pid, std::vector<SuspiciousAllocation>& outAllocs)
 {
     outAllocs.clear();
@@ -542,5 +680,55 @@ bool SystemProcessDefender::FindSuspiciousExecutableAllocations(DWORD pid, std::
     }
 
     CloseHandle(hProc);
+    return true;
+}
+
+bool SystemProcessDefender::ScanSystemProcessesForSuspiciousMemAllocations()
+{
+    std::vector<SystemProcessDefender::SystemProcessInfo> systemProcesses;
+    std::vector<SystemProcessDefender::SystemProcessInfo> system32NonSystemUsers;
+    this->GetSystem32Processes(systemProcesses, system32NonSystemUsers);
+
+    std::vector<SystemProcessDefender::SystemProcessInfo> allSystem32Processes = systemProcesses;
+    allSystem32Processes.insert(allSystem32Processes.end(), system32NonSystemUsers.begin(), system32NonSystemUsers.end());
+
+    std::vector<SystemProcessDefender::SuspiciousAllocation> allocations;
+    for (auto& process : allSystem32Processes)
+    {
+        if (!this->FindSuspiciousExecutableAllocations(process.pid, allocations))
+        {
+            LogsManager::log_entry logentry;
+            logentry.Type = "Error";
+            logentry.Module_name = SystemProcessDefender::LogModuleName;
+            logentry.Location = std::string(process.path.begin(), process.path.end());
+            logentry.Description = "Couldn't scan this process for suspicious allocations of executable memory";
+
+            LogsManager::Log(logentry);
+            continue;
+        }
+
+        for (auto& allocation : allocations)
+        {
+            std::ostringstream extra_info_ss;
+
+
+            extra_info_ss << "Found suspicious allocation in process " << std::string(process.path.begin(), process.path.end()) << ". At: " << std::hex << allocation.baseAddress
+                << " size=" << allocation.regionSize
+                << " protection=0x" << std::hex << allocation.protect << std::dec
+                << " type=" << (allocation.type == MEM_PRIVATE ? "PRIVATE" : "MAPPED")
+                << (allocation.writableExecutable ? " [W+X]" : " [X]") << "\n";
+            if (!allocation.mappedFile.empty())
+                extra_info_ss << "  mapped file: " << std::string(allocation.mappedFile.begin(), allocation.mappedFile.end()) << "\n";
+
+            LogsManager::log_entry logentry;
+            logentry.Type = "Memory anomaly";
+            logentry.Module_name = SystemProcessDefender::LogModuleName;
+            logentry.Location = std::string(process.path.begin(), process.path.end());
+            logentry.Description = "A suspicious allocation of executable memory was found in this process.";
+            logentry.Extra_info = extra_info_ss.str();
+
+            LogsManager::Log(logentry);
+        }
+    }
     return true;
 }

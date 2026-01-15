@@ -1,10 +1,13 @@
 ﻿#pragma once
 #include "ProcessManager.h"
 #include "SignatureManager.h"
+#include "LogsManager.h"
 
 class SystemProcessDefender
 {
 private:
+    static const std::string LogModuleName;
+
     ProcessManager processManager;
     SignatureManager signatureManager;
 
@@ -60,10 +63,18 @@ public:
 
     bool CompareImageSectionsWithDisk(DWORD pid, std::vector<SectionMismatch>& outMismatches, std::wstring& outMainModulePath);
 
+    bool DiskMemoryIntegrityCheckSystemProcesses();
+
     bool ScanExecutableMemoryForSignatures(DWORD pid, const std::vector<std::pair<std::string, std::wstring>>& signatures, std::vector<SignatureHit>& outHits);
+
+    bool ScanAllProcessesForBlacklistedSignatures();
 
     bool CheckThreadsExecution(DWORD pid, std::vector<ThreadSuspicious>& outSuspiciousThreads);
 
+    bool ScanSystemProcessesThreadsSuspiciousExecution();
+
     bool FindSuspiciousExecutableAllocations(DWORD pid, std::vector<SuspiciousAllocation>& outAllocs);
+
+    bool ScanSystemProcessesForSuspiciousMemAllocations();
 };
 

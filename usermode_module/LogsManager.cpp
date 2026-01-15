@@ -20,29 +20,15 @@ std::string LogsManager::GetCurrentDate()
     return oss.str();
 }
 
-bool LogsManager::Log(std::string Type, std::string Module_name, bool Dont_save_to_file, std::optional<std::string> Date, std::optional<std::string> Location, std::optional<std::string> Filename,
-    std::optional<std::string> Action, std::optional<std::string> Status, std::optional<std::string> Description, std::optional<std::string> Extra_info)
+bool LogsManager::Log(log_entry logEntry, bool Dont_save_to_file)
 {
-    LogsManager::log_entry entry = 
-    {
-    Type,
-    Module_name,
-    Date ? *Date : this->GetCurrentDate(),
-    Location ? *Location : "",
-    Filename ? *Filename : "",
-    Action ? *Action : "",
-    Status ? *Status : "",
-    Description ? *Description : "",
-    Extra_info ? *Extra_info : ""
-    };
-
     if (!Dont_save_to_file)
     {
-        if (!this->ExportLogToFile(entry))
+        if (!LogsManager::ExportLogToFile(logEntry))
             return false;
     }
 
-    LogsManager::Logs.push_back(entry);
+    LogsManager::Logs.push_back(logEntry);
     
     return true;
 }

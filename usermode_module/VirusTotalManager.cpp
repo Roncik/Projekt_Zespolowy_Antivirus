@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "VirusTotalManager.h"
 
+//static member definitions
+const std::string VirusTotalManager::LogModuleName = "VirusTotal"; // VirusTotal
+
 bool VirusTotalManager::QueryFileForAnalysis(std::string file_path, _Inout_opt_ std::vector<char>* outResponse, _Inout_opt_ DWORD* outStatusCode)
 {
     if (file_path.length() == 0)
@@ -255,13 +258,13 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers()
     std::vector<ProcessManager::SystemModuleInfo> systemModules;
     if (!procmgr.GetAllProcesses(processes))
     {
-        std::wcout << L"Failed getting processes!\n";
+        //std::wcout << L"Failed getting processes!\n";
         return false;
     }
 
     if (!procmgr.GetAllSystemModules(systemModules))
     {
-        std::wcout << L"Failed getting system modules!\n";
+        //std::wcout << L"Failed getting system modules!\n";
         return false;
     }
 
@@ -273,20 +276,20 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers()
         std::wstring processPath;
         if (!procmgr.GetProcessImagePath(reinterpret_cast<DWORD>(process.processID), processPath))
         {
-            std::wcout << L"Failed getting path for process: " << process.processName << L"\n";
+            //std::wcout << L"Failed getting path for process: " << process.processName << L"\n";
             continue;
         }
 
         MD5_HashManager::Hash16 processFileHash;
         if (!hashmgr.computeFileMd5(NULL, processPath, processFileHash))
         {
-            std::wcout << L"Failed getting hash for process: " << process.processName << L"\n";
+            //std::wcout << L"Failed getting hash for process: " << process.processName << L"\n";
             continue;
         }
 
         VirusTotalManager::FileAnalysisResult result;
 
-        std::wcout << L"Now scanning: " << process.processName << L" - ";
+        //std::wcout << L"Now scanning: " << process.processName << L" - ";
         if (!this->IsHashInLocalDatabase(processFileHash, result)) //file was already scanned before
         {
             std::string processPathStr(processPath.begin(), processPath.end());
@@ -294,18 +297,26 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers()
 
             if (!this->AnalyseFileGetResult(processPathStr, result))
             {
-                std::wcout << L"file analysis failed\n";
+                //std::wcout << L"file analysis failed\n";
                 continue;
             }
             this->SaveResultToLocalDatabase(processFileHash, result, true);
         }
 
+        LogsManager::log_entry logentry;
+        logentry.Module_name = VirusTotalManager::LogModuleName;
+        logentry.Filename = std::string(process.processName.begin(), process.processName.end());
+        logentry.Location = std::string(processPath.begin(), processPath.end());
+        logentry.Status = "Analysis finished";
+        logentry.Description = "This file was sucessfully analysed using VirusTotal API";
+        logentry.Extra_info = "File's MD5 Hash: " + processFileHash.to_hexstring32();
+
         if (result == VirusTotalManager::FileAnalysisResult::MALICIOUS)
-            std::wcout << L"file is malicious\n";
+            logentry.Type = "Malicious file";
         else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
-            std::wcout << L"file is suspicious\n";
-        else
-            std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
+            logentry.Type = "Suspicious file";
+
+        LogsManager::Log(logentry);
     }
 
     for (auto& systemModule : systemModules)
@@ -316,7 +327,7 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers()
         MD5_HashManager::Hash16 processFileHash;
         if (!hashmgr.computeFileMd5(NULL, Path, processFileHash))
         {
-            std::wcout << L"Failed getting hash for process: " << systemModule.fileName << L"\n";
+            //std::wcout << L"Failed getting hash for process: " << systemModule.fileName << L"\n";
             continue;
         }
 
@@ -329,18 +340,26 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers()
 
             if (!this->AnalyseFileGetResult(processPathStr, result))
             {
-                std::wcout << L"file analysis failed\n";
+                //std::wcout << L"file analysis failed\n";
                 continue;
             }
             this->SaveResultToLocalDatabase(processFileHash, result, true);
         }
 
+        LogsManager::log_entry logentry;
+        logentry.Module_name = VirusTotalManager::LogModuleName;
+        logentry.Filename = std::string(systemModule.fileName.begin(), systemModule.fileName.end());
+        logentry.Location = std::string(Path.begin(), Path.end());
+        logentry.Status = "Analysis finished";
+        logentry.Description = "This file was sucessfully analysed using VirusTotal API";
+        logentry.Extra_info = "File's MD5 Hash: " + processFileHash.to_hexstring32();
+
         if (result == VirusTotalManager::FileAnalysisResult::MALICIOUS)
-            std::wcout << L"file is malicious\n";
+            logentry.Type = "Malicious file";
         else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
-            std::wcout << L"file is suspicious\n";
-        else
-            std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
+            logentry.Type = "Suspicious file";
+
+        LogsManager::Log(logentry);
     }
 
     return true;
