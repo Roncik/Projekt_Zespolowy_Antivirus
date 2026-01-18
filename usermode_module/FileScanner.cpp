@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "FileScanner.h"
 
+//static member definitions
+const std::string FileScanner::LogModuleName = "File Scanner";
+
 void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const std::wstring& startDir, const std::vector<MD5_HashManager::Hash16>& blacklist)
 {
     if (blacklist.empty())
@@ -9,6 +12,7 @@ void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const 
     }
 
     std::vector<std::wstring> stack;
+    LogsManager logsManager;
     stack.push_back(startDir);
 
     while (!stack.empty())
@@ -61,12 +65,18 @@ void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const 
                     std::string pathUtf8(bufSize, '\0');
                     WideCharToMultiByte(CP_UTF8, 0, fullPath.c_str(), -1, &pathUtf8[0], bufSize, nullptr, nullptr);
                     if (!pathUtf8.empty() && pathUtf8.back() == '\0') pathUtf8.pop_back();
-                    std::cout << "Now scanning: " << pathUtf8 << std::endl;
+                    
 
                     if (MD5HashMgr.contains_hash(blacklist, MD5Hash))
                     {
-                        std::cout << "[BLACKLIST MATCH] " << "  ->  " << pathUtf8 << std::endl;
-                        Sleep(3000);
+                        LogsManager::log_entry logentry;
+                        logentry.Type = "Malicious file";
+                        logentry.Module_name = FileScanner::LogModuleName;
+                        logentry.Filename = pathUtf8.substr(pathUtf8.find_last_of('\\'));
+                        logentry.Location = pathUtf8;
+                        logentry.Description = "This file matches a signature from blacklisted signatures database";
+                        
+                        LogsManager::Log(logentry);
                     }
                 }
                 else

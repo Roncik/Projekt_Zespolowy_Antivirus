@@ -3,6 +3,7 @@
 #include "HTTPSManager.h"
 #include "MD5_HashManager.h"
 #include "ProcessManager.h"
+#include "LogsManager.h"
 
 class VirusTotalManager
 {
@@ -16,6 +17,8 @@ public:
 	};
 
 private:
+	static const std::string LogModuleName;
+	
 	std::wstring API_KEY;
 	std::wstring hashDatabasePath;
 	std::map<MD5_HashManager::Hash16, FileAnalysisResult> localHashDatabase;

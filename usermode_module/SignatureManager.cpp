@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "SignatureManager.h"
 
+//static member definitions
+std::vector<std::pair<std::string, std::wstring>> SignatureManager::CodeSignatureDatabase;
+
 void SignatureManager::ParseHexPattern(const std::string& hex, std::vector<BYTE>& outBytes, std::string& outMask)
 {
     outBytes.clear();
@@ -66,5 +69,10 @@ uintptr_t SignatureManager::FindPattern(const BYTE* data, SIZE_T dataLen, const 
             return (uintptr_t)(i); //returns an offset to the first byte of the first pattern instance in the data
     }
     return 0;
+}
+
+void SignatureManager::AddCodeSignatureToDatabase(std::pair<std::string, std::wstring>& codeSignature)
+{
+    SignatureManager::CodeSignatureDatabase.push_back(codeSignature);
 }
 

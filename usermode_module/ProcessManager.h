@@ -17,7 +17,7 @@ public:
 
     bool GetMainModuleBase(DWORD pid, uintptr_t& outBase, std::wstring& outPath);
 
-    bool GetProcessImagePath(DWORD pid, std::wstring& outPath);
+    static bool GetProcessImagePath(DWORD pid, std::wstring& outPath);
 
     bool GetProcessOwner(DWORD pid, std::wstring& outDomain, std::wstring& outUser);
 
@@ -27,7 +27,7 @@ public:
 
     bool IsWritableExecutable(DWORD prot);
 
-    bool GetAllProcesses(std::vector<ProcessInfo>& processes);
+    static bool GetAllProcesses(std::vector<ProcessInfo>& processes);
 
     bool GetAllSystemModules(std::vector<SystemModuleInfo>& systemModules);
 };
