@@ -6,14 +6,13 @@
 #include <condition_variable>
 #include <vector>
 #include <chrono>
+#include <atomic>
 
 
 //Integrity check System32 processes (file-memory)
-void moduleDeployer::runIntegrityCheck(bool* scanRunning, std::mutex &sR_mutex, std::mutex &oL_mutex, std::vector<std::wstring> &outputLines)
-{    
-    std::unique_lock<std::mutex> sR_lock(sR_mutex);
-        *scanRunning = true;
-    sR_lock.unlock();
+void moduleDeployer::runIntegrityCheck(std::atomic<bool>& scanInProgress, std::mutex &oL_mutex, std::vector<std::wstring> &outputLines)
+{        
+    scanInProgress.store(true);
 
     SystemProcessDefender spd;
     std::vector<SystemProcessDefender::SystemProcessInfo> systemProcesses;
@@ -43,10 +42,8 @@ void moduleDeployer::runIntegrityCheck(bool* scanRunning, std::mutex &sR_mutex, 
                     outputLines.push_back(L" " + changedByte);
                 outputLines.push_back(L"\n");
             oL_lock.unlock();
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        }        
     }    
-    sR_lock.lock();
-        *scanRunning = false;
-    sR_lock.unlock();
+    
+    scanInProgress.store(false);
 }

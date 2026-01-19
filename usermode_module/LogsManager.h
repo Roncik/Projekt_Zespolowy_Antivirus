@@ -16,10 +16,10 @@ public:
 		std::string Description = "";
 		std::string Extra_info = "";
 	};
+	static std::vector<std::unique_ptr<log_entry>> Logs;
 
 private:
 	static const uint8_t log_entry_num_of_fields = 9;
-	static std::vector<log_entry> Logs;
 	static std::wstring LogsDatabasePath;
 
 public:
@@ -27,6 +27,6 @@ public:
 
 	static bool ExportLogToFile(log_entry Log, std::wstring FilePath = LogsDatabasePath, char SeparatorSign = ';');
 
-	static bool ReadLogsFromFile(std::vector<log_entry>& LogsList = Logs, std::wstring FilePath = LogsDatabasePath, char SeparatorSign = ';');
+	static bool ReadLogsFromFile(std::vector<std::unique_ptr<log_entry>>& LogsList = Logs, std::wstring FilePath = LogsDatabasePath, char SeparatorSign = ';');
 };
 

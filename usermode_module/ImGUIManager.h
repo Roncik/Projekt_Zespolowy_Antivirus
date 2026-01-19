@@ -1,4 +1,5 @@
 #pragma once
+#include "LogsManager.h"
 
 class ImGUIManager
 {

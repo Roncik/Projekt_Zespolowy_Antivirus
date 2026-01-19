@@ -1,9 +1,12 @@
 #include "pch.h"
 #include "ImGUIManager.h"
 #include "TemporaryHelpers.h"
+#include "SystemProcessDefender.h"
 #include <mutex>
 #include <thread>
+#include <atomic>
 #include <vector>
+#include <memory>
 //#include <chrono>
 
 //static member definitions
@@ -12,6 +15,15 @@
  bool                     ImGUIManager::g_DeviceLost = false;
  UINT                     ImGUIManager::g_ResizeWidth = 0, ImGUIManager::g_ResizeHeight = 0;
  D3DPRESENT_PARAMETERS    ImGUIManager::g_d3dpp = {};
+
+ // Forward declarations
+ std::string convert_from_wstring(const std::wstring& wstr);
+ std::ostream& operator<<(std::ostream& os, LogsManager::log_entry const& arg);
+ std::string to_string(LogsManager::log_entry const& arg);
+
+// -----------------------------------------------------------------------
+// ------------------------ D3DX9 + WIN32 --------------------------------
+// -----------------------------------------------------------------------
 
 bool ImGUIManager::CreateDeviceD3D(HWND hWnd)
 {
@@ -84,6 +96,10 @@ LRESULT __stdcall ImGUIManager::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
     }
 }
 
+// -----------------------------------------------------------------------
+// -------------------------- GUI CORE -----------------------------------
+// -----------------------------------------------------------------------
+
 // Data shared between different functions of the main window
 struct MainWindowData
 {
@@ -93,9 +109,13 @@ struct MainWindowData
     bool showActiveProtectionOutputPanel = false;
 };
 
-// Needed for antivirus scan module and GUI integration
+// Used for scan logger module to GUI communication
+// using TemporaryHelpers.cpp logging behaviour
 static std::vector<std::wstring> outputLines;
 static std::mutex oL_mutex;
+// using SystemProcessDefender.cpp logging behaviour
+std::vector<std::unique_ptr<LogsManager::log_entry>> logQueue{};        // Inter-thread queue, periodically joined into LogsManager::Logs and flushed
+std::mutex lQ_mutex;
 
 // Run the main window
 int ImGUIManager::RunUI()
@@ -216,7 +236,7 @@ int ImGUIManager::RunUI()
         ImGui::NewFrame();
         ImGui::DockSpaceOverViewport();
         //ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);    // Transparent dockspace
-
+        
         if (mwData.showActiveProtectionConfigPanel) 
         {
             ShowActiveProtectionConfigPanel(&mwData.showActiveProtectionConfigPanel); 
@@ -337,31 +357,123 @@ int ImGUIManager::RunUI()
     return 0;
 }
 
-void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open) 
+// -----------------------------------------------------------------------
+// ------------------------- PANELS (SUBWINDOWS) -------------------------
+// -----------------------------------------------------------------------
+
+void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open)
 {    
     ImGui::SetNextWindowSize(ImVec2(80, 160), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Active protection config", p_open))
     {        
         ImGui::SetNextItemWidth(65);
         ImGui::TextWrapped("Run modules");
-                
-        static bool scanRunning = false;    // Initialize only at first pass of this line
-        static std::mutex sR_mutex;                    
+
+        SystemProcessDefender spd{};
+        // For complete scanner functionalities' names refer to buttons' labels
+        static std::atomic<bool> icInProgress(false);
+        static std::atomic<bool> sspfsmaInProgress(false);              
 
         ImGui::TextWrapped("Integrity check"); 
         ImGui::SameLine(); 
-        if (ImGui::Button("Run")) 
-        {
-            std::unique_lock<std::mutex> sR_lock(sR_mutex);
-            if (!scanRunning)
-            {                
-                sR_lock.unlock();
-                std::thread(moduleDeployer::runIntegrityCheck, &scanRunning, std::ref(sR_mutex), std::ref(oL_mutex), std::ref(outputLines)).detach();
+        if (ImGui::Button("Run##icRunButton")) 
+        {            
+            if (!icInProgress.load())
+            {                                
+                std::thread(moduleDeployer::runIntegrityCheck, std::ref(icInProgress), std::ref(oL_mutex), std::ref(outputLines)).detach();
             }          
         }        
+        ImGui::TextWrapped("ScanSystemProcessesForSuspiciousMemAllocations");        
+        if (ImGui::Button("Run##sspfsmaRunButton"))
+        {
+            if (!sspfsmaInProgress.load())
+            {
+                std::thread([&spd](){ 
+                    sspfsmaInProgress.store(true);  // will it fs capture by reference?
+                    spd.ScanSystemProcessesForSuspiciousMemAllocations(logQueue, lQ_mutex); // will it fs capture by reference?
+                    sspfsmaInProgress.store(false);
+                }).detach();
+            }
+        }
     }
     ImGui::End();
 }
+
+// Communicates with a worker runIntegrityCheck thread, checking a shared vector
+// for new elements (new lines output by the scanning module) and updating the UI text field
+void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
+{
+    ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Active protection output", p_open))
+    {
+        ImGui::Text("Console output of running active protection modules.");
+
+        static ImGuiTextBuffer consoleOutput;  
+        static int lines = 0;
+        static bool logFileLoaded = false;
+
+        if (ImGui::Button("Clear")) 
+        { 
+            lines = 0; 
+            consoleOutput.clear(); 
+            LogsManager::Logs.clear(); 
+            logFileLoaded = false;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Add text")) { consoleOutput.appendf("%i The quick brown fox jumps over the lazy dog\n", ++lines); }
+        ImGui::SameLine();
+        if (ImGui::Button("Load")) 
+        {                 
+            if (!logFileLoaded) {
+                LogsManager::ReadLogsFromFile();
+                for (auto& log : LogsManager::Logs) 
+                {
+                    consoleOutput.appendf(to_string(*log).c_str());
+                }
+                logFileLoaded = true;
+            }
+        }        
+
+        // Outdated, for testing purposes only
+        std::unique_lock<std::mutex> oL_lock(oL_mutex);
+            if (outputLines.size() > 0)
+            {
+                for (std::wstring line : outputLines)
+                    consoleOutput.appendf(convert_from_wstring(line).c_str());
+                outputLines.clear();
+            }
+        oL_lock.unlock();
+
+        // Getting the logs generated by scanning modules,
+        // synchronized through simple mutexes
+        static std::vector<std::unique_ptr<LogsManager::log_entry>> logBuffer{};
+        std::unique_lock<std::mutex> lQ_ulock(lQ_mutex, std::defer_lock);
+        lQ_ulock.lock();
+            logBuffer.insert(logBuffer.end(), std::make_move_iterator(logQueue.begin()),
+                                                      std::make_move_iterator(logQueue.end()));
+            logQueue.clear();
+        lQ_ulock.unlock();
+
+        // Presenting the logs to user
+        // + moving into LogsManager::Logs for future filtering queries
+        for (auto& log : logBuffer)
+        {
+            LogsManager::Log(*log);
+            consoleOutput.appendf(to_string(*log).c_str());
+            LogsManager::Logs.push_back(std::move(log));
+        }
+        logBuffer.clear();        
+
+        ImGui::BeginChild("Output field");                       
+        ImGui::TextUnformatted(consoleOutput.begin(), consoleOutput.end());        
+        ImGui::EndChild();
+    }
+    ImGui::End();
+}
+
+// -----------------------------------------------------------------------
+// ------------------------ HELPER FUNCTIONS -----------------------------
+// -----------------------------------------------------------------------
 
 // Helper to convert from wstring to string
 std::string convert_from_wstring(const std::wstring& wstr)
@@ -376,34 +488,18 @@ std::string convert_from_wstring(const std::wstring& wstr)
     return strTo;
 }
 
-// Communicates with a worker runIntegrityCheck thread, checking a shared vector
-// for new elements (new lines output by the scanning module) and updating the UI text field
-void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
+// Helpers to convert log_entry structure into string
+std::ostream& operator<<(std::ostream& os, LogsManager::log_entry const& arg)
 {
-    ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("Active protection output", p_open))
-    {
-        ImGui::Text("Console output of running active protection modules.");
+    os << arg.Type << ";" << arg.Module_name << ";" << arg.Date << ";"
+        << arg.Location << ";" << arg.Filename << ";" << arg.Action << ";"
+        << arg.Status << ";" << arg.Description << ";" << arg.Extra_info << ";" << "\n";
 
-        static ImGuiTextBuffer consoleOutput;  
-        static int lines = 0;
-
-        if (ImGui::Button("Clear")) { consoleOutput.clear(); lines = 0; }               
-        ImGui::SameLine();
-        if (ImGui::Button("Add text")) { consoleOutput.appendf("%i The quick brown fox jumps over the lazy dog\n", ++lines); }
-
-        std::unique_lock<std::mutex> oL_lock(oL_mutex);
-            if (outputLines.size() > 0)
-            {
-                for (std::wstring line : outputLines)
-                    consoleOutput.appendf(convert_from_wstring(line).c_str());
-                outputLines.clear();
-            }
-        oL_lock.unlock();
-
-        ImGui::BeginChild("Output field");                       
-        ImGui::TextUnformatted(consoleOutput.begin(), consoleOutput.end());        
-        ImGui::EndChild();
-    }
-    ImGui::End();
+    return os;
+}
+std::string to_string(LogsManager::log_entry const& arg)
+{
+    std::ostringstream ss;
+    ss << arg;
+    return std::move(ss).str(); // enable efficiencies in c++17
 }

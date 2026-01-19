@@ -75,6 +75,6 @@ public:
 
     bool FindSuspiciousExecutableAllocations(DWORD pid, std::vector<SuspiciousAllocation>& outAllocs);
 
-    bool ScanSystemProcessesForSuspiciousMemAllocations();
+    bool ScanSystemProcessesForSuspiciousMemAllocations(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex);
 };
 

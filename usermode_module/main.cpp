@@ -146,7 +146,7 @@ int main()
     //else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
     //    std::wcout << L"file is suspicious\n";
     //else
-    //    std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
+        //std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
     }
 
     //Virustotal scan all running processes's file's and loaded system modules
@@ -167,5 +167,14 @@ int main()
         logsmgr.ReadLogsFromFile();
         logsmgr.Log("Antivirus", "Test");*/
     }
+
+    // Another logger test
+    //{
+    //    SystemProcessDefender spd;
+    //    spd.DiskMemoryIntegrityCheckSystemProcesses();
+    //    //spd.CheckThreadsExecution();
+    //    //spd.FindSuspiciousExecutableAllocations();
+    //    spd.ScanSystemProcessesForSuspiciousMemAllocations();
+    //}
     return 0;
 }

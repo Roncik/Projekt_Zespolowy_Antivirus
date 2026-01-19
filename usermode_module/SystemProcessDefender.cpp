@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "SystemProcessDefender.h"
+#include <memory>
 
 //static member definitions
 const std::string SystemProcessDefender::LogModuleName = "System Process Guard"; // System Process Guard
@@ -570,7 +571,7 @@ bool SystemProcessDefender::CheckThreadsExecution(DWORD pid, std::vector<ThreadS
 }
 
 bool SystemProcessDefender::ScanSystemProcessesThreadsSuspiciousExecution()
-{
+{        
     std::vector<SystemProcessDefender::SystemProcessInfo> systemProcesses;
     std::vector<SystemProcessDefender::SystemProcessInfo> system32NonSystemUsers;
     this->GetSystem32Processes(systemProcesses, system32NonSystemUsers);
@@ -683,8 +684,8 @@ bool SystemProcessDefender::FindSuspiciousExecutableAllocations(DWORD pid, std::
     return true;
 }
 
-bool SystemProcessDefender::ScanSystemProcessesForSuspiciousMemAllocations()
-{
+bool SystemProcessDefender::ScanSystemProcessesForSuspiciousMemAllocations(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex)
+{       
     std::vector<SystemProcessDefender::SystemProcessInfo> systemProcesses;
     std::vector<SystemProcessDefender::SystemProcessInfo> system32NonSystemUsers;
     this->GetSystem32Processes(systemProcesses, system32NonSystemUsers);
@@ -692,7 +693,8 @@ bool SystemProcessDefender::ScanSystemProcessesForSuspiciousMemAllocations()
     std::vector<SystemProcessDefender::SystemProcessInfo> allSystem32Processes = systemProcesses;
     allSystem32Processes.insert(allSystem32Processes.end(), system32NonSystemUsers.begin(), system32NonSystemUsers.end());
 
-    std::vector<SystemProcessDefender::SuspiciousAllocation> allocations;
+    std::unique_lock<std::mutex> lQ_ulock(lQ_mutex, std::defer_lock);
+    std::vector<SystemProcessDefender::SuspiciousAllocation> allocations;    
     for (auto& process : allSystem32Processes)
     {
         if (!this->FindSuspiciousExecutableAllocations(process.pid, allocations))
@@ -700,10 +702,14 @@ bool SystemProcessDefender::ScanSystemProcessesForSuspiciousMemAllocations()
             LogsManager::log_entry logentry;
             logentry.Type = "Error";
             logentry.Module_name = SystemProcessDefender::LogModuleName;
+            logentry.Date = LogsManager::GetCurrentDate();
             logentry.Location = std::string(process.path.begin(), process.path.end());
             logentry.Description = "Couldn't scan this process for suspicious allocations of executable memory";
 
-            LogsManager::Log(logentry);
+            auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);  // Uses default copy constructor of log_entry to initialize with logentry's field values
+            lQ_ulock.lock();
+                logQueue.push_back(std::move(logentryPtr));      // Should destroy logentryPtr at the end of scope
+            lQ_ulock.unlock();            
             continue;
         }
 
@@ -719,15 +725,19 @@ bool SystemProcessDefender::ScanSystemProcessesForSuspiciousMemAllocations()
                 << (allocation.writableExecutable ? " [W+X]" : " [X]") << "\n";
             if (!allocation.mappedFile.empty())
                 extra_info_ss << "  mapped file: " << std::string(allocation.mappedFile.begin(), allocation.mappedFile.end()) << "\n";
-
+            
             LogsManager::log_entry logentry;
             logentry.Type = "Memory anomaly";
             logentry.Module_name = SystemProcessDefender::LogModuleName;
+            logentry.Date = LogsManager::GetCurrentDate();
             logentry.Location = std::string(process.path.begin(), process.path.end());
             logentry.Description = "A suspicious allocation of executable memory was found in this process.";
             logentry.Extra_info = extra_info_ss.str();
 
-            LogsManager::Log(logentry);
+            auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);
+            lQ_ulock.lock();
+                logQueue.push_back(std::move(logentryPtr));
+            lQ_ulock.unlock();                        
         }
     }
     return true;
