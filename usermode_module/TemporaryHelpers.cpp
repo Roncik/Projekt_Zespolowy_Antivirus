@@ -41,8 +41,8 @@ void moduleDeployer::runIntegrityCheck(std::atomic<bool>& scanInProgress, std::m
                 for (auto& changedByte : sectionMismatch.actual)
                     outputLines.push_back(L" " + changedByte);
                 outputLines.push_back(L"\n");
-            oL_lock.unlock();
-        }        
+            oL_lock.unlock();           
+        }                
     }    
     
     scanInProgress.store(false);

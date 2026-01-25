@@ -7,6 +7,7 @@
 #include <atomic>
 #include <vector>
 #include <memory>
+#include <map>
 //#include <chrono>
 
 //static member definitions
@@ -104,9 +105,9 @@ LRESULT __stdcall ImGUIManager::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 struct MainWindowData
 {
     // Panels (child windows of the main window)
-    bool showActiveProtectionConfigPanel = false;
+    bool showActiveProtectionConfigPanel = true;
     //bool showActiveProtectionConsoleOutputPanel = false; // its just the logger example despite the name
-    bool showActiveProtectionOutputPanel = false;
+    bool showActiveProtectionOutputPanel = true;
 };
 
 // Used for scan logger module to GUI communication
@@ -116,6 +117,13 @@ static std::mutex oL_mutex;
 // using SystemProcessDefender.cpp logging behaviour
 std::vector<std::unique_ptr<LogsManager::log_entry>> logQueue{};        // Inter-thread queue, periodically joined into LogsManager::Logs and flushed
 std::mutex lQ_mutex;
+
+// Map of threads corresponding to each antivirus module (or module's component) 
+std::map<std::string, std::shared_ptr<std::thread>> workerThreads
+{
+    {"IntegrityCheck", std::shared_ptr<std::thread>(new std::thread())},
+    {"ScanSystemProcessesForSuspiciousMemAllocations", std::shared_ptr<std::thread>(new std::thread())}
+};
 
 // Run the main window
 int ImGUIManager::RunUI()
@@ -265,10 +273,10 @@ int ImGUIManager::RunUI()
         // Create the always-visible main menu bar over the main viewport
         if (ImGui::BeginMainMenuBar())
         {
-            if (ImGui::BeginMenu("View"))
+            /*if (ImGui::BeginMenu("View"))
             {             
                 ImGui::EndMenu();
-            }
+            }*/
             if (ImGui::BeginMenu("Panels"))
             {
                 if (ImGui::MenuItem("Active protection config", NULL))                
@@ -345,6 +353,13 @@ int ImGUIManager::RunUI()
             ImGUIManager::g_DeviceLost = true;
     }
 
+    // Wait for antivirus scanner threads to finish their work before closing the app
+    for (auto const& thread : workerThreads)
+    {
+        if (thread.second->joinable() == true)                   
+            thread.second->join();        
+    }
+
     // Cleanup
     ImGui_ImplDX9_Shutdown();
     ImGui_ImplWin32_Shutdown();
@@ -361,6 +376,8 @@ int ImGUIManager::RunUI()
 // ------------------------- PANELS (SUBWINDOWS) -------------------------
 // -----------------------------------------------------------------------
 
+// A panel to configure which scanning modules are to be actively running during
+// program execution
 void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open)
 {    
     ImGui::SetNextWindowSize(ImVec2(80, 160), ImGuiCond_FirstUseEver);
@@ -380,7 +397,7 @@ void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open)
         {            
             if (!icInProgress.load())
             {                                
-                std::thread(moduleDeployer::runIntegrityCheck, std::ref(icInProgress), std::ref(oL_mutex), std::ref(outputLines)).detach();
+                *workerThreads.at("IntegrityCheck") = std::thread(moduleDeployer::runIntegrityCheck, std::ref(icInProgress), std::ref(oL_mutex), std::ref(outputLines));
             }          
         }        
         ImGui::TextWrapped("ScanSystemProcessesForSuspiciousMemAllocations");        
@@ -388,11 +405,11 @@ void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open)
         {
             if (!sspfsmaInProgress.load())
             {
-                std::thread([&spd](){ 
-                    sspfsmaInProgress.store(true);  // will it fs capture by reference?
-                    spd.ScanSystemProcessesForSuspiciousMemAllocations(logQueue, lQ_mutex); // will it fs capture by reference?
+                *workerThreads.at("ScanSystemProcessesForSuspiciousMemAllocations") = std::thread([&spd](){   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference
+                    sspfsmaInProgress.store(true);
+                    spd.ScanSystemProcessesForSuspiciousMemAllocations(logQueue, lQ_mutex);
                     sspfsmaInProgress.store(false);
-                }).detach();
+                });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
             }
         }
     }
@@ -401,6 +418,7 @@ void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open)
 
 // Communicates with a worker runIntegrityCheck thread, checking a shared vector
 // for new elements (new lines output by the scanning module) and updating the UI text field
+// Also doing the same for ScanSystemProcessesForSuspiciousMemAllocations
 void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
 {
     ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
@@ -409,7 +427,7 @@ void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
         ImGui::Text("Console output of running active protection modules.");
 
         static ImGuiTextBuffer consoleOutput;  
-        static int lines = 0;
+        static int lines = 0;   // Outdated
         static bool logFileLoaded = false;
 
         if (ImGui::Button("Clear")) 
@@ -425,12 +443,16 @@ void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
         if (ImGui::Button("Load")) 
         {                 
             if (!logFileLoaded) {
-                LogsManager::ReadLogsFromFile();
-                for (auto& log : LogsManager::Logs) 
+                if (!LogsManager::ReadLogsFromFile())
                 {
-                    consoleOutput.appendf(to_string(*log).c_str());
+                    consoleOutput.appendf("[ERROR] Couldn't load the log file.\n");                    
                 }
-                logFileLoaded = true;
+                else
+                {
+                    for (auto& log : LogsManager::Logs)
+                        consoleOutput.appendf(to_string(*log).c_str());
+                    logFileLoaded = true;
+                }
             }
         }        
 
@@ -450,7 +472,7 @@ void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
         std::unique_lock<std::mutex> lQ_ulock(lQ_mutex, std::defer_lock);
         lQ_ulock.lock();
             logBuffer.insert(logBuffer.end(), std::make_move_iterator(logQueue.begin()),
-                                                      std::make_move_iterator(logQueue.end()));
+                                              std::make_move_iterator(logQueue.end()));
             logQueue.clear();
         lQ_ulock.unlock();
 
@@ -458,9 +480,12 @@ void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
         // + moving into LogsManager::Logs for future filtering queries
         for (auto& log : logBuffer)
         {
-            LogsManager::Log(*log);
+            if (!LogsManager::Log(*log))
+            {
+                consoleOutput.appendf("[ERROR] Couldn't save scanner's logs into a file.\n");
+            }                       
             consoleOutput.appendf(to_string(*log).c_str());
-            LogsManager::Logs.push_back(std::move(log));
+            LogsManager::Logs.push_back(std::move(log));            
         }
         logBuffer.clear();        
 
