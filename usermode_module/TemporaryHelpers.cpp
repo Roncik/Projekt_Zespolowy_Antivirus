@@ -10,10 +10,8 @@
 
 
 //Integrity check System32 processes (file-memory)
-void moduleDeployer::runIntegrityCheck(std::atomic<bool>& scanInProgress, std::mutex &oL_mutex, std::vector<std::wstring> &outputLines)
-{        
-    scanInProgress.store(true);
-
+void moduleDeployer::runIntegrityCheck(std::atomic<bool> &scanInProgress, std::mutex &oL_mutex, std::vector<std::wstring> &outputLines)
+{           
     SystemProcessDefender spd;
     std::vector<SystemProcessDefender::SystemProcessInfo> systemProcesses;
     std::vector<SystemProcessDefender::SystemProcessInfo> system32NonSystemUsers;
@@ -44,6 +42,5 @@ void moduleDeployer::runIntegrityCheck(std::atomic<bool>& scanInProgress, std::m
             oL_lock.unlock();           
         }                
     }    
-    
-    scanInProgress.store(false);
+    scanInProgress = false;
 }

@@ -739,6 +739,6 @@ bool SystemProcessDefender::ScanSystemProcessesForSuspiciousMemAllocations(std::
                 logQueue.push_back(std::move(logentryPtr));
             lQ_ulock.unlock();                        
         }
-    }
+    }   
     return true;
 }
