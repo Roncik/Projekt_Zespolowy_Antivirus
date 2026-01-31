@@ -402,13 +402,30 @@ void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
 
         //static ImGuiTextBuffer consoleOutput;
         //static int lines = 0;   // Outdated
+        static ImGuiTextBuffer logTypeBuffer;
+        static ImGuiTextBuffer logModulenameBuffer;
         static ImGuiTextBuffer logDateBuffer;
+        static ImGuiTextBuffer logLocationBuffer;
+        static ImGuiTextBuffer logFilenameBuffer;
+        static ImGuiTextBuffer logActionBuffer;
+        static ImGuiTextBuffer logStatusBuffer;
+        static ImGuiTextBuffer logDescriptionBuffer;
+        static ImGuiTextBuffer logExtrainfoBuffer;
         static bool logFileLoaded = false;
 
         if (ImGui::Button("Clear"))
         {
             //lines = 0;
             //consoleOutput.clear();
+            logTypeBuffer.clear();
+            logModulenameBuffer.clear();
+            logDateBuffer.clear();
+            logLocationBuffer.clear();
+            logFilenameBuffer.clear();
+            logActionBuffer.clear();
+            logStatusBuffer.clear();
+            logDescriptionBuffer.clear();
+            logExtrainfoBuffer.clear();
             LogsManager::Logs.clear();
             logFileLoaded = false;
         }
@@ -425,7 +442,15 @@ void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
                     for (auto& log : LogsManager::Logs)
                     {
                         //consoleOutput.appendf(to_string(*log).c_str());
+                        logTypeBuffer.appendf((log->Type + "\n").c_str());
+                        logModulenameBuffer.appendf((log->Module_name + "\n").c_str());
                         logDateBuffer.appendf((log->Date + "\n").c_str());
+                        logLocationBuffer.appendf((log->Location + "\n").c_str());
+                        logFilenameBuffer.appendf((log->Filename + "\n").c_str());
+                        logActionBuffer.appendf((log->Action + "\n").c_str());
+                        logStatusBuffer.appendf((log->Status + "\n").c_str());
+                        logDescriptionBuffer.appendf((log->Description + "\n").c_str());
+                        logExtrainfoBuffer.appendf((log->Extra_info + "\n").c_str());
                     }
                     logFileLoaded = true;
                 }
@@ -456,15 +481,15 @@ void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
             {"Extra_info", std::vector<std::string>{ "\n" }}
         };
 
-        // Presenting the logs to user
-        // + moving into LogsManager::Logs for future filtering queries
+        // Writing to the log file        
+        // And processing for future filtering queries
         for (auto& log : logBuffer)
         {
             if (!LogsManager::Log(*log))
             {
                 //consoleOutput.appendf("[ERROR] Couldn't save scanner's logs into a file.\n");
             }                       
-            //consoleOutput.appendf(to_string(*log).c_str());
+            //consoleOutput.appendf(to_string(*log).c_str());            
             logFields.at("Type").push_back(log->Type);
             logFields.at("Module_name").push_back(log->Module_name);
             logFields.at("Date").push_back(log->Date);
@@ -474,19 +499,57 @@ void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
             logFields.at("Status").push_back(log->Status);
             logFields.at("Description").push_back(log->Description);
             logFields.at("Extra_info").push_back(log->Extra_info);
-            LogsManager::Logs.push_back(std::move(log));            
+            logTypeBuffer.appendf((log->Type + "\n").c_str());
+            logModulenameBuffer.appendf((log->Module_name + "\n").c_str());
+            logDateBuffer.appendf((log->Date + "\n").c_str());
+            logLocationBuffer.appendf((log->Location + "\n").c_str());
+            logFilenameBuffer.appendf((log->Filename + "\n").c_str());
+            logActionBuffer.appendf((log->Action + "\n").c_str());
+            logStatusBuffer.appendf((log->Status + "\n").c_str());
+            logDescriptionBuffer.appendf((log->Description + "\n").c_str());
+            logExtrainfoBuffer.appendf((log->Extra_info + "\n").c_str());
+            LogsManager::Logs.push_back(std::move(log));    
         }
-        logBuffer.clear();        
+        logBuffer.clear();                
 
-        /*ImGui::BeginChild("Output field");                       
-        ImGui::TextUnformatted(consoleOutput.begin(), consoleOutput.end());        
-        ImGui::EndChild();*/
-
-        ImVec2 parentsSize = ImGui::GetWindowSize();
+        // Displaying the logs
         ImGui::BeginChild("LogsDisplayAreaChild", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
         {
-            ImGui::BeginChild("DateChild", ImVec2(parentsSize[0]/9.0f, 0.0f), ImGuiChildFlags_ResizeX);
+            ImVec2 parentsSize = ImGui::GetContentRegionAvail();
+            ImGui::BeginChild("TypeChild", ImVec2(parentsSize[0] / 9.0f, 0.0f), ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar);            
+                ImGui::TextUnformatted(logTypeBuffer.begin(), logTypeBuffer.end());           
+            ImGui::EndChild();
+            ImGui::SameLine();
+            ImGui::BeginChild("ModulenameChild", ImVec2(parentsSize[0] / 9.0f, 0.0f), ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextUnformatted(logModulenameBuffer.begin(), logModulenameBuffer.end());
+            ImGui::EndChild();
+            ImGui::SameLine();
+            ImGui::BeginChild("DateChild", ImVec2(parentsSize[0]/9.0f, 0.0f), ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar);
                 ImGui::TextUnformatted(logDateBuffer.begin(), logDateBuffer.end());
+            ImGui::EndChild();          
+            ImGui::SameLine();
+            ImGui::BeginChild("LocationChild", ImVec2(parentsSize[0] / 9.0f, 0.0f), ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextUnformatted(logLocationBuffer.begin(), logLocationBuffer.end());
+            ImGui::EndChild();
+            ImGui::SameLine();
+            ImGui::BeginChild("FilenameChild", ImVec2(parentsSize[0] / 9.0f, 0.0f), ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextUnformatted(logFilenameBuffer.begin(), logFilenameBuffer.end());
+            ImGui::EndChild();
+            ImGui::SameLine();
+            ImGui::BeginChild("ActionChild", ImVec2(parentsSize[0] / 9.0f, 0.0f), ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextUnformatted(logActionBuffer.begin(), logActionBuffer.end());
+            ImGui::EndChild();
+            ImGui::SameLine();
+            ImGui::BeginChild("StatusChild", ImVec2(parentsSize[0] / 9.0f, 0.0f), ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextUnformatted(logStatusBuffer.begin(), logStatusBuffer.end());
+            ImGui::EndChild();
+            ImGui::SameLine();
+            ImGui::BeginChild("DescriptionChild", ImVec2(parentsSize[0] / 9.0f, 0.0f), ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextUnformatted(logDescriptionBuffer.begin(), logDescriptionBuffer.end());
+            ImGui::EndChild();
+            ImGui::SameLine();
+            ImGui::BeginChild("ExtrainfoChild", ImVec2(parentsSize[0] / 9.0f, 0.0f), ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar);
+                ImGui::TextUnformatted(logExtrainfoBuffer.begin(), logExtrainfoBuffer.end());
             ImGui::EndChild();
         }
         ImGui::EndChild();
