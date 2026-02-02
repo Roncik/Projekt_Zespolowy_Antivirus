@@ -2,6 +2,9 @@
 
 #define ERROR_SERVICE_ALREADY_EXISTS 1001L
 
+// IOCTL codes (must be exactly the same as in kernelmode_module)
+#define IOCTL_MY_ECHO CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 class ServiceControlManager
 {
 private:
@@ -26,8 +29,9 @@ private:
     };
     
     static const DWORD DEFAULT_WAIT_MS = 10000;
+    inline static const std::wstring deviceName = L"OpenAV";
     inline static const std::wstring serviceName = L"OpenAV";
-    inline static std::wstring driverPath = L"./OpenAVDriver.sys";
+    inline static std::wstring driverFileName = L"OpenAVDriver.sys";
 
     typedef DWORD SC_RESULT;
 
@@ -44,63 +48,9 @@ private:
     static SC_RESULT DeleteDriverService(const std::wstring& serviceName);
 
 public:
-    static bool CreateAndStartDriver(const std::wstring& serviceName = serviceName, const std::wstring& driverPath = driverPath);
-    static bool SetDriverPath(const std::wstring& driverPath);
+    static bool CreateAndStartDriver(const std::wstring& serviceName = serviceName, const std::wstring& driverFileName = driverFileName);
+    static bool StopDriverAndDeleteService(const std::wstring& serviceName = serviceName);
+    static bool ExampleIOCTLCall(const std::wstring& deviceName = deviceName);
 };
-
-//// Przykładowy main pokazujący użycie
-//int wmain(int argc, wchar_t* argv[])
-//{
-//    // Przykład wywołania:
-//    // DRIVER_NAME i path do pliku .sys
-//    std::wstring serviceName = L"MyDriver";
-//    std::wstring binaryPath = L"C:\\Windows\\System32\\drivers\\MyDriver.sys";
-//
-//    DWORD rc;
-//
-//    rc = EnsureDriverServiceExists(serviceName, binaryPath);
-//    if (rc != ERROR_SUCCESS) {
-//        std::wcerr << L"EnsureDriverServiceExists failed: " << rc << L"\n";
-//        return 1;
-//    }
-//    std::wcout << L"Service ensured/created.\n";
-//
-//    rc = StartDriverService(serviceName);
-//    if (rc != ERROR_SUCCESS) {
-//        std::wcerr << L"StartDriverService failed: " << rc << L"\n";
-//    }
-//    else {
-//        std::wcout << L"Service started.\n";
-//    }
-//
-//    bool running = false;
-//    rc = IsDriverServiceRunning(serviceName, running);
-//    if (rc == ERROR_SUCCESS) {
-//        std::wcout << L"Is running: " << (running ? L"YES" : L"NO") << L"\n";
-//    }
-//    else {
-//        std::wcerr << L"IsDriverServiceRunning failed: " << rc << L"\n";
-//    }
-//
-//    // stop
-//    rc = StopDriverService(serviceName);
-//    if (rc != ERROR_SUCCESS) {
-//        std::wcerr << L"StopDriverService failed: " << rc << L"\n";
-//    }
-//    else {
-//        std::wcout << L"Service stopped.\n";
-//    }
-//
-//    // delete
-//    rc = DeleteDriverService(serviceName);
-//    if (rc != ERROR_SUCCESS) {
-//        std::wcerr << L"DeleteDriverService failed: " << rc << L"\n";
-//    }
-//    else {
-//        std::wcout << L"Service deleted.\n";
-//    }
-//
-//    return 0;
-//}
 
 

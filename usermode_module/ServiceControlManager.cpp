@@ -103,11 +103,15 @@ DWORD ServiceControlManager::StartDriverService(const std::wstring& serviceName,
 {
     ScHandle scm(OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT));
     if (!scm.valid())
+    {
         return GetLastError();
+    }
 
     ScHandle sch(OpenServiceW(scm, serviceName.c_str(), SERVICE_START | SERVICE_QUERY_STATUS));
     if (!sch.valid())
+    {
         return GetLastError();
+    }
 
     // StartService returns false if the service is already started
     if (!StartServiceW(sch, 0, nullptr)) 
@@ -188,27 +192,68 @@ DWORD ServiceControlManager::DeleteDriverService(const std::wstring& serviceName
 }
 
 // Wrapper for starting the driver via SC
-bool ServiceControlManager::CreateAndStartDriver(const std::wstring& serviceName, const std::wstring& driverPath)
+bool ServiceControlManager::CreateAndStartDriver(const std::wstring& serviceName, const std::wstring& driverFileName)
 {
-    if (ServiceControlManager::EnsureDriverServiceExists(serviceName, driverPath) != ERROR_SUCCESS)
+    // We need to pass full driver path to SC. We assume the driver file is always in the same directory as .exe
+    auto getCurrentDirPath = []() -> std::wstring
+        {
+            WCHAR buffer[MAX_PATH] = { 0 };
+            GetModuleFileNameW(NULL, buffer, MAX_PATH);
+            std::wstring::size_type pos = std::wstring(buffer).find_last_of(L"\\/");
+            return std::wstring(buffer).substr(0, pos);
+        };
+    std::wstring driverFullPath = getCurrentDirPath() + L"\\" + driverFileName;
+    
+    
+    if (ServiceControlManager::EnsureDriverServiceExists(serviceName, driverFullPath) != ERROR_SUCCESS)
+    {
         return false;
+    }
+
     if (ServiceControlManager::StartDriverService(serviceName) != ERROR_SUCCESS)
+    {
         return false;
-
-
+    }
 
     return true;
 }
 
-bool ServiceControlManager::SetDriverPath(const std::wstring& driverPath)
+// Wrapper for stopping the driver and deleting its service
+bool ServiceControlManager::StopDriverAndDeleteService(const std::wstring& serviceName)
 {
-    // check whether a file at the given path exists and we have access to it
-    std::ifstream file(driverPath);
-    if (!file)
+    ServiceControlManager::StopDriverService(serviceName);
+    
+    if (ServiceControlManager::DeleteDriverService(serviceName) != ERROR_SUCCESS)
         return false;
-    file.close();
+    
+    return true;
+}
 
-    ServiceControlManager::driverPath = driverPath;
+bool ServiceControlManager::ExampleIOCTLCall(const std::wstring& deviceName)
+{
+    std::wstring devicePath = L"\\\\.\\" + deviceName;
+    
+    // To send IOCTL requests we need to open a R/W handle to the device
+    HANDLE h = CreateFileW(devicePath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(h);
+        return false;
+    }
 
+    char inbuf[] = "Hello from usermode";
+    char outbuf[256] = { 0 };
+    DWORD bytes = 0;
+
+    BOOL ok = DeviceIoControl(h, IOCTL_MY_ECHO, inbuf, (DWORD)strlen(inbuf) + 1, outbuf, sizeof(outbuf), &bytes, NULL);
+    if (!ok)
+    {
+        CloseHandle(h);
+        return false;
+    }
+    else 
+        printf("Driver replied (%u bytes): '%s'\n", bytes, outbuf);
+    
+    CloseHandle(h);
     return true;
 }
