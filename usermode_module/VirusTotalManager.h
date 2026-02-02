@@ -1,5 +1,4 @@
 #pragma once
-#include "VirusTotalManager.h"
 #include "HTTPSManager.h"
 #include "MD5_HashManager.h"
 #include "ProcessManager.h"
@@ -17,7 +16,7 @@ public:
 	};
 
 private:
-	static const std::string LogModuleName;
+	inline static const std::string LogModuleName = "VirusTotal";
 	
 	std::wstring API_KEY;
 	std::wstring hashDatabasePath;

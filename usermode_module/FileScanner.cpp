@@ -1,9 +1,6 @@
 #include "pch.h"
 #include "FileScanner.h"
 
-//static member definitions
-const std::string FileScanner::LogModuleName = "File Scanner";
-
 void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const std::wstring& startDir, const std::vector<MD5_HashManager::Hash16>& blacklist)
 {
     if (blacklist.empty())

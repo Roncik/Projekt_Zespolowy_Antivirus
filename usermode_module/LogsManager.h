@@ -16,11 +16,11 @@ public:
 		std::string Description = "";
 		std::string Extra_info = "";
 	};
-	static std::vector<std::unique_ptr<log_entry>> Logs;
+	inline static std::vector<std::unique_ptr<log_entry>> Logs;
 
 private:
 	static const uint8_t log_entry_num_of_fields = 9;
-	static std::wstring LogsDatabasePath;
+	inline static std::wstring LogsDatabasePath = L"logs.txt";
 
 public:
 	static bool Log(log_entry logEntry, bool Dont_save_to_file = false);

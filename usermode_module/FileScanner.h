@@ -9,7 +9,7 @@ private:
     std::vector<MD5_HashManager::Hash16> MD5HashBlacklist;
     std::mutex coutMutex;
     std::vector<std::thread> threads;
-    static const std::string LogModuleName;
+    inline static const std::string LogModuleName = "VirusTotal";
 
 public:
     //Scan files in the specified directory and all its subdirectories against a MD5 blacklist

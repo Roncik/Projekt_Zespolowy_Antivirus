@@ -1,9 +1,6 @@
 #include "pch.h"
 #include "VirusTotalManager.h"
 
-//static member definitions
-const std::string VirusTotalManager::LogModuleName = "VirusTotal"; // VirusTotal
-
 bool VirusTotalManager::QueryFileForAnalysis(std::string file_path, _Inout_opt_ std::vector<char>* outResponse, _Inout_opt_ DWORD* outStatusCode)
 {
     if (file_path.length() == 0)
@@ -274,7 +271,7 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers()
     for (auto& process : processes)
     {
         std::wstring processPath;
-        if (!procmgr.GetProcessImagePath(reinterpret_cast<DWORD>(process.processID), processPath))
+        if (!ProcessManager::GetProcessImagePath(reinterpret_cast<DWORD>(process.processID), processPath))
         {
             //std::wcout << L"Failed getting path for process: " << process.processName << L"\n";
             continue;

@@ -15,7 +15,7 @@ public:
         std::wstring filePath;
     };
 
-    bool GetMainModuleBase(DWORD pid, uintptr_t& outBase, std::wstring& outPath);
+    static bool GetMainModuleBase(DWORD pid, uintptr_t& outBase, std::wstring& outPath);
 
     static bool GetProcessImagePath(DWORD pid, std::wstring& outPath);
 

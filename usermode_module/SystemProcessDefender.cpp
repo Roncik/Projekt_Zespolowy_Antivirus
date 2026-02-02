@@ -68,7 +68,7 @@ void SystemProcessDefender::GetSystem32Processes(std::vector<SystemProcessDefend
                 continue; // skip idle
 
             std::wstring path;
-            bool gotPath = this->processManager.GetProcessImagePath(pid, path);
+            bool gotPath = ProcessManager::GetProcessImagePath(pid, path);
 
             std::wstring domain, user;
             bool gotOwner = this->processManager.GetProcessOwner(pid, domain, user);
@@ -122,7 +122,7 @@ bool SystemProcessDefender::CompareImageSectionsWithDisk(DWORD pid, std::vector<
 
     // get main module base & path
     uintptr_t base = 0;
-    if (!this->processManager.GetMainModuleBase(pid, base, outMainModulePath))
+    if (!ProcessManager::GetMainModuleBase(pid, base, outMainModulePath))
         return false;
 
     // map file on disk
@@ -432,7 +432,7 @@ bool SystemProcessDefender::CheckThreadsExecution(DWORD pid, std::vector<ThreadS
     // first get main module executable sections and address range
     uintptr_t base = 0;
     std::wstring mainPath;
-    if (!this->processManager.GetMainModuleBase(pid, base, mainPath)) 
+    if (!ProcessManager::GetMainModuleBase(pid, base, mainPath))
         return false;
 
     // parse module's sections on-disk to gather executable ranges (filemapping technique)

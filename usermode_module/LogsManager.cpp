@@ -5,10 +5,6 @@
 #include <iostream>
 #include <string>
 
-//static member definitions
-std::vector<std::unique_ptr<LogsManager::log_entry>> LogsManager::Logs;
-std::wstring LogsManager::LogsDatabasePath = L"logs.txt";
-
 std::string LogsManager::GetCurrentDate()
 {
     using namespace std::chrono;
