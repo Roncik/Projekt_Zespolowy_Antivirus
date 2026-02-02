@@ -8,6 +8,10 @@ This project uses Direct3D9 for the Graphical User Interface so you need:
 
 [DirectX End-User Runtimes](https://www.microsoft.com/en-us/download/details.aspx?id=8109)
 
+This project contains a windows driver code so you need:
+
+[Windows Driver Kit](https://learn.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk)
+
 ## 3.1 FileScanner
 
 ### FileScanner Class
