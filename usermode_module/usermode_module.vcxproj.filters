@@ -34,6 +34,12 @@
     <Filter Include="LogsManager">
       <UniqueIdentifier>{53621b90-49ee-412a-ad21-4a2f7fbb2de5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ServiceControlManager">
+      <UniqueIdentifier>{a304e9ea-91c3-4eb3-9e11-aed1b4012f7b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TemporaryHelpers">
+      <UniqueIdentifier>{1191e638-ad65-4227-9b4c-a93176d757e0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -90,11 +96,14 @@
     <ClCompile Include="ImGUIManager.cpp">
       <Filter>ImGUI</Filter>
     </ClCompile>
-    <ClCompile Include="TemporaryHelpers.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="LogsManager.cpp">
       <Filter>LogsManager</Filter>
+    </ClCompile>
+    <ClCompile Include="ServiceControlManager.cpp">
+      <Filter>ServiceControlManager</Filter>
+    </ClCompile>
+    <ClCompile Include="TemporaryHelpers.cpp">
+      <Filter>TemporaryHelpers</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -152,11 +161,14 @@
     <ClInclude Include="ImGUIManager.h">
       <Filter>ImGUI</Filter>
     </ClInclude>
-    <ClInclude Include="TemporaryHelpers.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="LogsManager.h">
       <Filter>LogsManager</Filter>
+    </ClInclude>
+    <ClInclude Include="ServiceControlManager.h">
+      <Filter>ServiceControlManager</Filter>
+    </ClInclude>
+    <ClInclude Include="TemporaryHelpers.h">
+      <Filter>TemporaryHelpers</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

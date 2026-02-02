@@ -73,10 +73,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)Include</IncludePath>
     <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(DXSDK_DIR)Lib\x64</LibraryPath>
+    <TargetName>OpenAV</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)Include</IncludePath>
     <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(DXSDK_DIR)Lib\x64</LibraryPath>
+    <TargetName>OpenAV</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -225,6 +227,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PrivilegeManager.cpp" />
     <ClCompile Include="ProcessManager.cpp" />
+    <ClCompile Include="ServiceControlManager.cpp" />
     <ClCompile Include="SignatureManager.cpp" />
     <ClCompile Include="SystemProcessDefender.cpp" />
     <ClCompile Include="TemporaryHelpers.cpp" />
@@ -247,6 +250,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="PrivilegeManager.h" />
     <ClInclude Include="ProcessManager.h" />
+    <ClInclude Include="ServiceControlManager.h" />
     <ClInclude Include="SignatureManager.h" />
     <ClInclude Include="SystemProcessDefender.h" />
     <ClInclude Include="TemporaryHelpers.h" />
