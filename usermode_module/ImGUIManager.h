@@ -150,38 +150,12 @@ public:
 
     // Initialize dx9+win32, then initialize and run main GUI thread
     int RunUI();
-
+    
     // Methods to show (create) specific panels (child windows of the main window)
-    //-----------------------------------------------------------------------------
     // Active protection (modules 3.x .. 3.y) config; change modules (scans) running continously in the background
     void ShowActiveProtectionConfigPanel(bool* p_open);
-    void ShowActiveProtectionOutputPanel(bool* p_open);
-    void ShowExampleAppLog(bool* p_open)
-    {
-        static ExampleAppLog log;
+    void ShowActiveProtectionOutputPanel(bool* p_open);    
 
-        // For the demo: add a debug button _BEFORE_ the normal log window contents
-        // We take advantage of a rarely used feature: multiple calls to Begin()/End() are appending to the _same_ window.
-        // Most of the contents of the window will be added by the log.Draw() call.
-        ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
-        ImGui::Begin("Example: Log", p_open);
-        if (ImGui::SmallButton("[Debug] Add 5 entries"))
-        {
-            static int counter = 0;
-            const char* categories[3] = { "info", "warn", "error" };
-            const char* words[] = { "Bumfuzzled", "Cattywampus", "Snickersnee", "Abibliophobia", "Absquatulate", "Nincompoop", "Pauciloquent" };
-            for (int n = 0; n < 5; n++)
-            {
-                const char* category = categories[counter % IM_COUNTOF(categories)];
-                const char* word = words[counter % IM_COUNTOF(words)];
-                log.AddLog("[%05d] [%s] Hello, current time is %.1f, here's a word: '%s'\n",
-                    ImGui::GetFrameCount(), category, ImGui::GetTime(), word);
-                counter++;
-            }
-        }
-        ImGui::End();
-
-        // Actually call in the regular Log helper (which will Begin() into the same window as we just did)
-        log.Draw("Example: Log", p_open);
-    }
+    // Helper methods
+    static void SetupLogsTableColumn(int colIndex, int colTextColor, int i, std::string& cellContents, std::string& selectedCell);
 };
