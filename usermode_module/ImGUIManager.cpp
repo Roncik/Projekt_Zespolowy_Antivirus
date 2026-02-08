@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "ImGUIManager.h"
 #include "SystemProcessDefender.h"
+#include "FileScanner.h"
+#include "VirusTotalManager.h"
 #include <mutex>
 #include <thread>
 #include <atomic>
@@ -8,20 +10,20 @@
 #include <memory>
 #include <map>
 //#include <chrono>
-
-//static member definitions
- LPDIRECT3D9              ImGUIManager::g_pD3D = nullptr;
- LPDIRECT3DDEVICE9        ImGUIManager::g_pd3dDevice = nullptr;
- bool                     ImGUIManager::g_DeviceLost = false;
- UINT                     ImGUIManager::g_ResizeWidth = 0, ImGUIManager::g_ResizeHeight = 0;
- D3DPRESENT_PARAMETERS    ImGUIManager::g_d3dpp = {}; 
-
- // Used when user tries to close the program
+// 
+ // Used when user tries to close the program (for handling proper threads joining)
  bool isTryingToExit = false;
 
 // -----------------------------------------------------------------------
 // ------------------------ D3DX9 + WIN32 --------------------------------
 // -----------------------------------------------------------------------
+
+//static member definitions
+LPDIRECT3D9              ImGUIManager::g_pD3D = nullptr;
+LPDIRECT3DDEVICE9        ImGUIManager::g_pd3dDevice = nullptr;
+bool                     ImGUIManager::g_DeviceLost = false;
+UINT                     ImGUIManager::g_ResizeWidth = 0, ImGUIManager::g_ResizeHeight = 0;
+D3DPRESENT_PARAMETERS    ImGUIManager::g_d3dpp = {};
 
 bool ImGUIManager::CreateDeviceD3D(HWND hWnd)
 {
@@ -86,7 +88,7 @@ LRESULT __stdcall ImGUIManager::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
                 return 0;
             break;
-        case WM_CLOSE:
+        case WM_CLOSE:  // For joining threads
             isTryingToExit = true;
             return 0;
         case WM_DESTROY:
@@ -114,14 +116,21 @@ struct MainWindowData
 std::vector<std::unique_ptr<LogsManager::log_entry>> logQueue{};        // Inter-thread queue, periodically joined into LogsManager::Logs and flushed
 std::mutex lQ_mutex;
 
-// Object needed to call its class' methods
-static SystemProcessDefender spd{};
+// Objects needed to call their class' methods
+static SystemProcessDefender spd;
+static FileScanner fileScanner;
+static VirusTotalManager vtmgr = VirusTotalManager(L"c164bc01db151497cc74f370c2b8d4f41d020d79030db9b9db7eca737869e99e", L"hashdb.txt"); //VirusTotal API key https://www.virustotal.com/gui/my-apikey 
 
 // Vector of threads running different antivirus functionalities (for now 10 slots for 10 functionalities)
 std::vector<std::thread> workerThreads(10);
 // Atomics signifying if worker threads are running
-static std::atomic<bool> icInProgress(false);
-static std::atomic<bool> sspfsmaInProgress(false);
+static std::atomic<bool> sspfsmaInProgress(false);  // outdated, delete this one
+static std::atomic<bool> sad_md5InProgress(false);
+static std::atomic<bool> dmicspInProgress(false);
+static std::atomic<bool> sapfbsInProgress(false);
+static std::atomic<bool> ssptseInProgress(false);
+static std::atomic<bool> vt_srpadInProgress(false);
+
 
 // Run the main window
 int ImGUIManager::RunUI()
@@ -240,6 +249,7 @@ int ImGUIManager::RunUI()
         ImGui::NewFrame();
         ImGui::DockSpaceOverViewport();       
 
+        // User closing the app while worker threads are still working
         if (isTryingToExit)
         {
             ImGui::OpenPopup("Quitting...");
@@ -252,7 +262,7 @@ int ImGUIManager::RunUI()
                 ImGui::Text("Waiting for all threads\nto finish their work...\n");
                 ImGui::Separator();
 
-                if (!(icInProgress || sspfsmaInProgress))
+                if (!(sspfsmaInProgress || sad_md5InProgress || dmicspInProgress || sapfbsInProgress || ssptseInProgress || vt_srpadInProgress))   // Scanning threads finished their work
                     done = true;
 
                 if (ImGui::Button("Go Back", ImVec2(120, 0)))
@@ -271,24 +281,20 @@ int ImGUIManager::RunUI()
         }
         
         // Show panels user chose as visible using menu options
-        if (mwData.showActiveProtectionConfigPanel) 
-        {
-            ShowActiveProtectionConfigPanel(&mwData.showActiveProtectionConfigPanel); 
-        }
-        if (mwData.showActiveProtectionOutputPanel)
-        {
+        if (mwData.showActiveProtectionConfigPanel)         
+            ShowActiveProtectionConfigPanel(&mwData.showActiveProtectionConfigPanel);         
+        if (mwData.showActiveProtectionOutputPanel)        
             ShowActiveProtectionOutputPanel(&mwData.showActiveProtectionOutputPanel);
-        }        
-
+        
         // Create the always-visible main menu bar over the main viewport
         if (ImGui::BeginMainMenuBar())
         {            
             if (ImGui::BeginMenu("Panels"))
             {
-                if (ImGui::MenuItem("Active protection config", NULL))                
-                    mwData.showActiveProtectionConfigPanel = true;                                
-                if (ImGui::MenuItem("Active protection console output", NULL))
-                    mwData.showActiveProtectionOutputPanel = true;                                
+                if (ImGui::MenuItem("Active protection config", NULL, mwData.showActiveProtectionConfigPanel))                
+                    mwData.showActiveProtectionConfigPanel = !mwData.showActiveProtectionConfigPanel;                                
+                if (ImGui::MenuItem("Active protection console output", NULL, mwData.showActiveProtectionOutputPanel))
+                    mwData.showActiveProtectionOutputPanel = !mwData.showActiveProtectionOutputPanel;                                
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
@@ -312,6 +318,7 @@ int ImGUIManager::RunUI()
             ImGUIManager::g_DeviceLost = true;
     }
 
+    // Ensuring all threads finish work if the user chooses to quit the app without forcing it
     if (!isForcingQuit)
     {
         for (auto& thread : workerThreads)
@@ -337,38 +344,131 @@ int ImGUIManager::RunUI()
 // ------------------------- PANELS (SUBWINDOWS) -------------------------
 // -----------------------------------------------------------------------
 
-// A panel to configure which scanning modules are to be actively running during
-// program execution
+// A panel to launch different scanning modules on demand
+// (In the future: A panel to configure which scanning modules are to be actively running during
+// program execution)
 void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open)
 {    
     ImGui::SetNextWindowSize(ImVec2(80, 160), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Active protection config", p_open))
-    {        
-        ImGui::SetNextItemWidth(65);
-        ImGui::TextWrapped("Run modules");            
-           
-        ImGui::TextWrapped("ScanSystemProcessesForSuspiciousMemAllocations");        
+    {                
+        ImGui::TextWrapped("Choose which scan to launch:");            
+        
+        ImGui::Separator();
         if (ImGui::Button("Run##sspfsmaRunButton"))
         {
             if (!sspfsmaInProgress)
             {
-                if (workerThreads.at(1).joinable())
-                    workerThreads.at(1).join();
+                if (workerThreads.at(0).joinable())
+                    workerThreads.at(0).join();
 
                 sspfsmaInProgress = true;
-                workerThreads.at(1) = std::thread([](){   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
+                workerThreads.at(0) = std::thread([](){   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
                     spd.ScanSystemProcessesForSuspiciousMemAllocations(logQueue, lQ_mutex);
                     sspfsmaInProgress = false;
                 });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
             }
         }
+        ImGui::SameLine();
+        ImGui::TextWrapped("ScanSystemProcessesForSuspiciousMemAllocations() - outdated, only for concurrency test");        
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##sad_md5RunButton"))
+        {
+            if (!sad_md5InProgress)
+            {
+                if (workerThreads.at(1).joinable())
+                    workerThreads.at(1).join();
+
+                sad_md5InProgress = true;
+                workerThreads.at(1) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
+                        fileScanner.LoadBlacklist_MD5(".\\MD5Hashes\\merged_hashes.txt");
+                        fileScanner.ScanAllDirectories_MD5(logQueue, lQ_mutex);
+                        sad_md5InProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("ScanAllDirectories_MD5() - .\\MD5Hashes\\merged_hashes.txt has to be supplied");
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##dmicspRunButton"))
+        {
+            if (!dmicspInProgress)
+            {
+                if (workerThreads.at(2).joinable())
+                    workerThreads.at(2).join();
+
+                dmicspInProgress = true;
+                workerThreads.at(2) = std::thread([]() {
+                        spd.DiskMemoryIntegrityCheckSystemProcesses(logQueue, lQ_mutex);
+                        dmicspInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("DiskMemoryIntegrityCheckSystemProcesses()");
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##sapfbsRunButton"))
+        {
+            if (!sapfbsInProgress)
+            {
+                if (workerThreads.at(3).joinable())
+                    workerThreads.at(3).join();
+
+                sapfbsInProgress = true;
+                workerThreads.at(3) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
+                        spd.ScanAllProcessesForBlacklistedSignatures(logQueue, lQ_mutex);
+                        sapfbsInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("ScanAllProcessesForBlacklistedSignatures()");
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##ssptseRunButton"))
+        {
+            if (!ssptseInProgress)
+            {
+                if (workerThreads.at(4).joinable())
+                    workerThreads.at(4).join();
+
+                ssptseInProgress = true;
+                workerThreads.at(4) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
+                        spd.ScanSystemProcessesThreadsSuspiciousExecution(logQueue, lQ_mutex);
+                        ssptseInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("ScanSystemProcessesThreadsSuspiciousExecution()");
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##vt_srpadRunButton"))
+        {
+            if (!vt_srpadInProgress)
+            {
+                if (workerThreads.at(5).joinable())
+                    workerThreads.at(5).join();
+
+                vt_srpadInProgress = true;
+                workerThreads.at(5) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                                           
+                        vtmgr.ScanRunningProcessesAndDrivers(logQueue, lQ_mutex);
+                        vt_srpadInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("(VirusTotal) ScanRunningProcessesAndDrivers()");
     }
     ImGui::End();
 }
 
-// Communicates with a worker runIntegrityCheck thread, checking a shared vector
+// Provides the UI for browsing logs created by scanner modules
+// Communicates with a worker threads, checking a shared vector
 // for new elements (new lines output by the scanning module) and updating the UI text field
-// Also doing the same for ScanSystemProcessesForSuspiciousMemAllocations
 void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
 {
     ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
@@ -391,7 +491,7 @@ void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
         {
             if (!logFileLoaded) {
                 if (!LogsManager::ReadLogsFromFile())
-                    ;    // handle               
+                    ;   // handle
                 else
                 {
                     logFileLoaded = true;
@@ -653,7 +753,7 @@ void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
                 ImGui::Text("[CONTENTS]:");
                 ImGui::SameLine();
                 if (selectedCell.empty())
-                    ImGui::TextDisabled("Click a cell to see its full contents...");
+                    ImGui::TextDisabled("Click on a cell to see its full contents...");
                 else
                     ImGui::TextWrapped("%s", selectedCell.c_str());
             }

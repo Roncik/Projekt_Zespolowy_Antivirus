@@ -269,7 +269,7 @@ bool SystemProcessDefender::CompareImageSectionsWithDisk(DWORD pid, std::vector<
     return true;
 }
 
-bool SystemProcessDefender::DiskMemoryIntegrityCheckSystemProcesses()
+bool SystemProcessDefender::DiskMemoryIntegrityCheckSystemProcesses(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex)
 {
 
     std::vector<SystemProcessDefender::SystemProcessInfo> systemProcesses;
@@ -278,7 +278,7 @@ bool SystemProcessDefender::DiskMemoryIntegrityCheckSystemProcesses()
 
     std::vector<SystemProcessDefender::SystemProcessInfo> allSystem32Processes = systemProcesses;
     allSystem32Processes.insert(allSystem32Processes.end(), system32NonSystemUsers.begin(), system32NonSystemUsers.end());
-    LogsManager logsManager;
+    std::unique_lock<std::mutex> lQ_ulock(lQ_mutex, std::defer_lock);   // Added for GUI integration    
     for (auto& process : allSystem32Processes)
     {
         std::vector<SystemProcessDefender::SectionMismatch> sectionMismatches;
@@ -305,7 +305,11 @@ bool SystemProcessDefender::DiskMemoryIntegrityCheckSystemProcesses()
             logentry.Description = "Code in this process was modified during runtime, this could indicate that it was tampered with.";
             logentry.Extra_info = std::string(extra_info_wstr.begin(), extra_info_wstr.end());
 
-            LogsManager::Log(logentry);
+            // Added for GUI integration
+            auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);  // Uses default copy constructor of log_entry to initialize with logentry's field values
+            lQ_ulock.lock();
+                logQueue.push_back(std::move(logentryPtr));
+            lQ_ulock.unlock();            
         }
     }
 
@@ -379,7 +383,7 @@ bool SystemProcessDefender::ScanExecutableMemoryForSignatures(DWORD pid, const s
     return true;
 }
 
-bool SystemProcessDefender::ScanAllProcessesForBlacklistedSignatures()
+bool SystemProcessDefender::ScanAllProcessesForBlacklistedSignatures(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex)
 {
     std::pair<std::string, std::wstring> exampleSig("48 B8 ? ? ? ? ? ? ? ? FF E0", L"hook_sig1");
     SignatureManager::AddCodeSignatureToDatabase(exampleSig);
@@ -388,6 +392,7 @@ bool SystemProcessDefender::ScanAllProcessesForBlacklistedSignatures()
     if (!ProcessManager::GetAllProcesses(processes))
         return false;
 
+    std::unique_lock<std::mutex> lQ_ulock(lQ_mutex, std::defer_lock);   // Added for GUI integration    
     for (auto& process : processes)
     {
         std::wstring filePath; 
@@ -402,7 +407,11 @@ bool SystemProcessDefender::ScanAllProcessesForBlacklistedSignatures()
             logentry.Filename = std::string(process.processName.begin(), process.processName.end());
             logentry.Description = "Failed to scan this file for code signature scan";
 
-            LogsManager::Log(logentry);
+            // Added for GUI integration
+            auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);
+            lQ_ulock.lock();
+                logQueue.push_back(std::move(logentryPtr));
+            lQ_ulock.unlock();
             continue;
         }
         for (auto& sigHit : sigHits)
@@ -418,7 +427,11 @@ bool SystemProcessDefender::ScanAllProcessesForBlacklistedSignatures()
             logentry.Description = "A blacklisted code signature was found in this process";
             logentry.Extra_info = extra_info_ss.str();
 
-            LogsManager::Log(logentry);
+            // Added for GUI integration
+            auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);
+            lQ_ulock.lock();
+                logQueue.push_back(std::move(logentryPtr));
+            lQ_ulock.unlock();
         }
     }
 }
@@ -570,7 +583,7 @@ bool SystemProcessDefender::CheckThreadsExecution(DWORD pid, std::vector<ThreadS
     return true;
 }
 
-bool SystemProcessDefender::ScanSystemProcessesThreadsSuspiciousExecution()
+bool SystemProcessDefender::ScanSystemProcessesThreadsSuspiciousExecution(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex)
 {        
     std::vector<SystemProcessDefender::SystemProcessInfo> systemProcesses;
     std::vector<SystemProcessDefender::SystemProcessInfo> system32NonSystemUsers;
@@ -578,6 +591,7 @@ bool SystemProcessDefender::ScanSystemProcessesThreadsSuspiciousExecution()
 
     std::vector<SystemProcessDefender::SystemProcessInfo> allSystem32Processes = systemProcesses;
     allSystem32Processes.insert(allSystem32Processes.end(), system32NonSystemUsers.begin(), system32NonSystemUsers.end());
+    std::unique_lock<std::mutex> lQ_ulock(lQ_mutex, std::defer_lock);   // Added for GUI integration    
     for (auto& process : allSystem32Processes)
     {
         std::vector<SystemProcessDefender::ThreadSuspicious> outSuspiciousThreads;
@@ -592,7 +606,11 @@ bool SystemProcessDefender::ScanSystemProcessesThreadsSuspiciousExecution()
             logentry.Location = std::string(process.path.begin(), process.path.end());
             logentry.Description = "Failed to scan this system process's threads for suspicious execution";
 
-            LogsManager::Log(logentry);
+            // Added for GUI integration
+            auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);
+            lQ_ulock.lock();
+                logQueue.push_back(std::move(logentryPtr));
+            lQ_ulock.unlock();
             continue;
         }
 
@@ -611,7 +629,11 @@ bool SystemProcessDefender::ScanSystemProcessesThreadsSuspiciousExecution()
             logentry.Description = "A thread of this process was detected to be executing code outside its original code address space";
             logentry.Extra_info = extra_info_ss.str();
 
-            LogsManager::Log(logentry);
+            // Added for GUI integration
+            auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);
+            lQ_ulock.lock();
+                logQueue.push_back(std::move(logentryPtr));
+            lQ_ulock.unlock();
         }
     }
     

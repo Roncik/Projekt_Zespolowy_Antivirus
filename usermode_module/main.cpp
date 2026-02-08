@@ -73,7 +73,7 @@ int main()
         }*/
     }
 
-    //Scan System32 processes for execution outside of original executable memory ranges
+    //Scan System32 processes for execution outside of original executable memory ranges    // not this!
     {
         /*SystemProcessDefender spd;
 
@@ -96,7 +96,7 @@ int main()
         }*/
     }
 
-    //Scan System32 processes for manually allocated memory that is executable.
+    //Scan System32 processes for manually allocated memory that is executable.     //not this!
     {
         //After testing, this functionality turns out to not be reliable enough for verifying system process integrity
         //and will be replaced for driver-based hook and monitoring of remote allocations (NtAllocateVirtualMemory/NtMapViewOfSection)
@@ -133,7 +133,7 @@ int main()
         }*/
     }
 
-    //VirusTotal analyse file and get result
+    //VirusTotal analyse file and get result        // not this!
     {
         //VirusTotalManager vtmgr = VirusTotalManager(L"c164bc01db151497cc74f370c2b8d4f41d020d79030db9b9db7eca737869e99e"); //VirusTotal API key https://www.virustotal.com/gui/my-apikey
         //VirusTotalManager::FileAnalysisResult result;
@@ -157,10 +157,10 @@ int main()
     }
     
     //Run Imgui window
-    /*{
+    {
         ImGUIManager imguimgr;
         imguimgr.RunUI();
-    }*/
+    }
 
     //Logger test
     {
@@ -179,7 +179,7 @@ int main()
     //}
 
     // Load Driver, send IOCTL, unload driver
-    {
+    /*{
         if (!ServiceControlManager::CreateAndStartDriver())
         {
             std::wcout << L"Creating and starting driver failed!" << std::endl; 
@@ -196,6 +196,6 @@ int main()
             system("pause");
         }
         system("pause");
-    }
+    }*/
     return 0;
 }

@@ -248,7 +248,7 @@ bool VirusTotalManager::IsHashInLocalDatabase(MD5_HashManager::Hash16 hash, File
     return true;
 }
 
-bool VirusTotalManager::ScanRunningProcessesAndDrivers()
+bool VirusTotalManager::ScanRunningProcessesAndDrivers(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex)
 {
     ProcessManager procmgr;
     std::vector<ProcessManager::ProcessInfo> processes;
@@ -266,7 +266,7 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers()
     }
 
     MD5_HashManager hashmgr;
-
+    std::unique_lock<std::mutex> lQ_ulock(lQ_mutex, std::defer_lock);   // Added for GUI integration    
 
     for (auto& process : processes)
     {
@@ -313,7 +313,11 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers()
         else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
             logentry.Type = "Suspicious file";
 
-        LogsManager::Log(logentry);
+        // Added for GUI integration
+        auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);  // Uses default copy constructor of log_entry to initialize with logentry's field values
+        lQ_ulock.lock();
+            logQueue.push_back(std::move(logentryPtr));
+        lQ_ulock.unlock();
     }
 
     for (auto& systemModule : systemModules)
@@ -356,7 +360,11 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers()
         else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
             logentry.Type = "Suspicious file";
 
-        LogsManager::Log(logentry);
+        // Added for GUI integration
+        auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);  // Uses default copy constructor of log_entry to initialize with logentry's field values
+        lQ_ulock.lock();
+            logQueue.push_back(std::move(logentryPtr));
+        lQ_ulock.unlock();
     }
 
     return true;

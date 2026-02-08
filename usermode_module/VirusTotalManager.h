@@ -51,6 +51,6 @@ public:
 
 	bool IsHashInLocalDatabase(MD5_HashManager::Hash16 hash, FileAnalysisResult& fileAnalysisResult);
 
-	bool ScanRunningProcessesAndDrivers();
+	bool ScanRunningProcessesAndDrivers(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex);		// Wrapper used for GUI integration
 };
 

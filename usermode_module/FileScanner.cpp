@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "FileScanner.h"
 
-void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const std::wstring& startDir, const std::vector<MD5_HashManager::Hash16>& blacklist)
+void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const std::wstring& startDir, const std::vector<MD5_HashManager::Hash16>& blacklist, std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex)
 {
     if (blacklist.empty())
     {
@@ -9,8 +9,8 @@ void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const 
     }
 
     std::vector<std::wstring> stack;
-    LogsManager logsManager;
     stack.push_back(startDir);
+    std::unique_lock<std::mutex> lQ_ulock(lQ_mutex, std::defer_lock);   // Added for GUI integration    
 
     while (!stack.empty())
     {
@@ -73,7 +73,11 @@ void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const 
                         logentry.Location = pathUtf8;
                         logentry.Description = "This file matches a signature from blacklisted signatures database";
                         
-                        LogsManager::Log(logentry);
+                        // Added for GUI integration
+                        auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);  // Uses default copy constructor of log_entry to initialize with logentry's field values
+                        lQ_ulock.lock();
+                            logQueue.push_back(std::move(logentryPtr));
+                        lQ_ulock.unlock();
                     }
                 }
                 else
@@ -88,7 +92,7 @@ void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const 
     }
 }
 
-void FileScanner::ScanAllDirectories_MD5()
+void FileScanner::ScanAllDirectories_MD5(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex)
 {
     if (this->MD5HashBlacklist.empty())
     {
@@ -123,7 +127,7 @@ void FileScanner::ScanAllDirectories_MD5()
         {
             try
             {
-                ScanDirectoryAndAllSubdirectories_MD5(hProv, std::wstring(driveRoot), MD5HashBlacklist);
+                ScanDirectoryAndAllSubdirectories_MD5(hProv, std::wstring(driveRoot), MD5HashBlacklist, logQueue, lQ_mutex);
             }
             catch (...)
             {

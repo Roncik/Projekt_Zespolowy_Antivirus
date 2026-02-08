@@ -62,16 +62,17 @@ public:
     void GetSystem32Processes(std::vector<SystemProcessInfo>& systemProcesses, std::vector<SystemProcessInfo>& nonSystemSystem32Processes);
 
     bool CompareImageSectionsWithDisk(DWORD pid, std::vector<SectionMismatch>& outMismatches, std::wstring& outMainModulePath);
-
-    bool DiskMemoryIntegrityCheckSystemProcesses();
+    
+    
+    bool DiskMemoryIntegrityCheckSystemProcesses(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex); // Wrapper used for GUI integration
 
     bool ScanExecutableMemoryForSignatures(DWORD pid, const std::vector<std::pair<std::string, std::wstring>>& signatures, std::vector<SignatureHit>& outHits);
-
-    bool ScanAllProcessesForBlacklistedSignatures();
+    
+    bool ScanAllProcessesForBlacklistedSignatures(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex); // Wrapper used for GUI integration
 
     bool CheckThreadsExecution(DWORD pid, std::vector<ThreadSuspicious>& outSuspiciousThreads);
-
-    bool ScanSystemProcessesThreadsSuspiciousExecution();
+    
+    bool ScanSystemProcessesThreadsSuspiciousExecution(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex); // Wrapper used for GUI integration
 
     bool FindSuspiciousExecutableAllocations(DWORD pid, std::vector<SuspiciousAllocation>& outAllocs);
 
