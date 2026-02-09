@@ -1,5 +1,6 @@
 ﻿#include "pch.h"
 #include "DeviceControl.hpp"
+#include "IntegrityChecker.h"
 
 #define DEVICE_NAME     L"\\Device\\OpenAV"
 #define SYMBOLIC_NAME   L"\\DosDevices\\OpenAV"
@@ -16,20 +17,27 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 
     UNREFERENCED_PARAMETER(RegistryPath);
 
+    status = AuxKlibInitialize();
+    if (!NT_SUCCESS(status)) 
+    {
+        DbgPrintEx(0, 0, "AuxKlib init failed\n");
+        return status;
+    }
+
     RtlInitUnicodeString(&devName, DEVICE_NAME);
     RtlInitUnicodeString(&symName, SYMBOLIC_NAME);
 
     status = IoCreateDevice(DriverObject, 0, &devName, FILE_DEVICE_UNKNOWN, 0, FALSE, &deviceObject);
     if (!NT_SUCCESS(status)) 
     {
-        KdPrint(("IoCreateDevice failed: 0x%X\n", status));
+        DbgPrintEx(0, 0, "IoCreateDevice failed: 0x%X\n", status);
         return status;
     }
 
     status = IoCreateSymbolicLink(&symName, &devName);
     if (!NT_SUCCESS(status)) 
     {
-        KdPrint(("IoCreateSymbolicLink failed: 0x%X\n", status));
+        DbgPrintEx(0, 0, "IoCreateSymbolicLink failed: 0x%X\n", status);
         IoDeleteDevice(deviceObject);
         return status;
     }
@@ -42,7 +50,11 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
     // device initialized
     deviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
 
-    KdPrint(("Driver loaded\n"));
+    DbgPrintEx(0, 0, "Driver loaded\n");
+
+    // For testing, will be moved to IOCTL
+    IntegrityChecker::ScanAllKernelModules();
+
     return STATUS_SUCCESS;
 }
 
@@ -53,6 +65,9 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 
     IoDeleteSymbolicLink(&symName);
     IoDeleteDevice(DriverObject->DeviceObject);
-    KdPrint(("Driver unloaded\n"));
+    DbgPrintEx(0, 0, "Driver unloaded\n");
 }
+
+
+
 

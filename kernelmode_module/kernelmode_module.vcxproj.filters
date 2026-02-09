@@ -23,6 +23,15 @@
     <Filter Include="DeviceControl">
       <UniqueIdentifier>{c9a266d3-2688-4f16-b3ee-59550bf72fef}</UniqueIdentifier>
     </Filter>
+    <Filter Include="IntegrityChecker">
+      <UniqueIdentifier>{52de980a-704d-4950-b86d-21d0faeca794}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ForwardDeclarations">
+      <UniqueIdentifier>{1ae8dc42-c07c-4ed0-b066-4f5b27e561a4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Helpers">
+      <UniqueIdentifier>{01cb8579-dc1d-49d0-8d25-06b28eb02578}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Inf Include="kernelmode_module.inf">
@@ -39,6 +48,12 @@
     <ClCompile Include="DeviceControl.cpp">
       <Filter>DeviceControl</Filter>
     </ClCompile>
+    <ClCompile Include="IntegrityChecker.cpp">
+      <Filter>IntegrityChecker</Filter>
+    </ClCompile>
+    <ClCompile Include="Helpers.cpp">
+      <Filter>Helpers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -46,6 +61,15 @@
     </ClInclude>
     <ClInclude Include="DeviceControl.hpp">
       <Filter>DeviceControl</Filter>
+    </ClInclude>
+    <ClInclude Include="IntegrityChecker.h">
+      <Filter>IntegrityChecker</Filter>
+    </ClInclude>
+    <ClInclude Include="ForwardDeclarations.h">
+      <Filter>ForwardDeclarations</Filter>
+    </ClInclude>
+    <ClInclude Include="Helpers.h">
+      <Filter>Helpers</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -14,6 +14,25 @@ int main()
 {
     SetUnhandledExceptionFilter(ExceptionFilters::SimplestCrashHandler);
 
+    {
+        if (!ServiceControlManager::CreateAndStartDriver())
+        {
+            std::wcout << L"Creating and starting driver failed!" << std::endl;
+            system("pause");
+        }
+        if (!ServiceControlManager::ExampleIOCTLCall())
+        {
+            std::wcout << L"IOCTL request failed!" << std::endl;
+            system("pause");
+        }
+        if (!ServiceControlManager::StopDriverAndDeleteService())
+        {
+            std::wcout << L"unloading driver failed!" << std::endl;
+            system("pause");
+        }
+        system("pause");
+    }
+
 
     
     //Scan all files in the system for blacklisted hash

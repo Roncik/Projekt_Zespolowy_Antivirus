@@ -207,11 +207,13 @@ bool ServiceControlManager::CreateAndStartDriver(const std::wstring& serviceName
     
     if (ServiceControlManager::EnsureDriverServiceExists(serviceName, driverFullPath) != ERROR_SUCCESS)
     {
+        std::wcout << L"Creating and starting driver failed!" << std::endl;
         return false;
     }
 
     if (ServiceControlManager::StartDriverService(serviceName) != ERROR_SUCCESS)
     {
+        std::wcout << L"Creating and starting driver failed!" << std::endl;
         return false;
     }
 
