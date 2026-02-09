@@ -1,5 +1,7 @@
 ﻿#include "pch.h"
 #include "ServiceControlManager.h"
+#include "LogsManager.h"
+#include "ImGUIManager.h"
 
 // Awaits service status change to desired with timeout
 DWORD ServiceControlManager::WaitForServiceStatus(SC_HANDLE schService, DWORD desiredState, DWORD timeoutMs)
@@ -236,10 +238,10 @@ bool ServiceControlManager::ExampleIOCTLCall(const std::wstring& deviceName)
     std::wstring devicePath = L"\\\\.\\" + deviceName;
     
     // To send IOCTL requests we need to open a R/W handle to the device
-    HANDLE h = CreateFileW(devicePath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE)
+    HANDLE hDevice = CreateFileW(devicePath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hDevice == INVALID_HANDLE_VALUE)
     {
-        CloseHandle(h);
+        CloseHandle(hDevice);
         return false;
     }
 
@@ -247,15 +249,111 @@ bool ServiceControlManager::ExampleIOCTLCall(const std::wstring& deviceName)
     char outbuf[256] = { 0 };
     DWORD bytes = 0;
 
-    BOOL ok = DeviceIoControl(h, IOCTL_MY_ECHO, inbuf, (DWORD)strlen(inbuf) + 1, outbuf, sizeof(outbuf), &bytes, NULL);
+    BOOL ok = DeviceIoControl(hDevice, IOCTL_MY_ECHO, inbuf, (DWORD)strlen(inbuf) + 1, outbuf, sizeof(outbuf), &bytes, NULL);
     if (!ok)
     {
-        CloseHandle(h);
+        CloseHandle(hDevice);
         return false;
     }
     else 
         printf("Driver replied (%u bytes): '%s'\n", bytes, outbuf);
     
-    CloseHandle(h);
+    CloseHandle(hDevice);
+    return true;
+}
+
+bool ServiceControlManager::IntegrityCheckKernel(const std::wstring& deviceName)
+{
+    std::wstring devicePath = L"\\\\.\\" + deviceName;
+
+    // To send IOCTL requests we need to open a R/W handle to the device
+    HANDLE hDevice = CreateFileW(devicePath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hDevice == INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(hDevice);
+        return false;
+    }
+
+    // 1. First Call: Get the required size (Buffer Overflow expected)
+    DWORD bytesReturned = 0;
+    SCAN_RESULTS_HEADER dummyHeader = { 0 };
+
+    // We pass a small buffer just to get the 'Count' back
+    BOOL result = DeviceIoControl(hDevice, IOCTL_KERNEL_INTEGRITY_SCAN, NULL, 0, &dummyHeader, sizeof(dummyHeader), &bytesReturned, NULL);
+
+    // The driver returns STATUS_BUFFER_OVERFLOW (which maps to False/GetLastError usually) if it has data but buffer is small
+    // But we check the dummyHeader.Count to see if anything was found.
+
+    if (dummyHeader.Count == 0) 
+    {
+        std::cout << "[*] No patches detected." << std::endl;
+        CloseHandle(hDevice);
+        return true;
+    }
+
+    std::cout << "[*] Detected " << dummyHeader.Count << " potential patches. Allocating buffer..." << std::endl;
+
+    // 2. Allocate correct size
+    ULONG bufferSize = sizeof(SCAN_RESULTS_HEADER) + (dummyHeader.Count * sizeof(Code_Patch));
+    std::vector<BYTE> buffer(bufferSize);
+
+    // 3. Second Call: Retrieve actual data
+    result = DeviceIoControl(hDevice, IOCTL_KERNEL_INTEGRITY_SCAN, NULL, 0, buffer.data(), bufferSize, &bytesReturned, NULL);
+
+    if (!result)
+    {
+        std::cerr << "Failed to retrieve results. Error: " << GetLastError() << std::endl;
+        CloseHandle(hDevice);
+        return false;
+    }
+
+    // 4. Parse Flat Data into your Pointer Structs
+    PSCAN_RESULTS_HEADER pHeader = (PSCAN_RESULTS_HEADER)buffer.data();
+    PCode_Patch pEntries = (PCode_Patch)(buffer.data() + sizeof(SCAN_RESULTS_HEADER));
+
+    std::vector<CodePatch_UM> patches;
+
+    for (ULONG i = 0; i < pHeader->Count; i++) 
+    {
+        CodePatch_UM patch;
+
+        // Point to the strings inside the flat buffer
+        // Note: These pointers are valid only as long as 'buffer' exists
+        patch.FilePath = pEntries[i].FilePath;
+        patch.SectionName = pEntries[i].SectionName;
+        patch.RVA = pEntries[i].RVA;
+        patch.Length = pEntries[i].Length;
+
+        // Cast raw bytes to char* for your struct
+        patch.OriginalBytes = (unsigned char*)pEntries[i].OriginalBytes;
+        patch.ActualBytes = (unsigned char*)pEntries[i].ActualBytes;
+
+        patches.push_back(patch);
+
+        LogsManager::log_entry logentry
+        {
+            .Type = "Kernel Memory Anomaly",
+            .Module_name = "Driver",
+            .Date = LogsManager::GetCurrentDate(),
+            .Location = patch.FilePath,
+            .Description = "A code patch was detected in this kernel driver"
+        };
+        //build extra info
+        std::stringstream extrainfoss;
+        extrainfoss << "Section: " << patch.SectionName << ". Original bytes: ";
+        for (int i = 0; i < patch.Length; ++i)
+            extrainfoss << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << static_cast<int>((unsigned char)patch.OriginalBytes[i]) << " ";
+        extrainfoss << ". Actual bytes: ";
+        for (int i = 0; i < patch.Length; ++i)
+            extrainfoss << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << static_cast<int>((unsigned char)patch.ActualBytes[i]) << " ";
+        logentry.Extra_info = extrainfoss.str();
+
+        auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);
+        ImGUIManager::lQ_mutex.lock();
+        ImGUIManager::logQueue.push_back(std::move(logentryPtr));
+        ImGUIManager::lQ_mutex.unlock();
+    }
+
+    CloseHandle(hDevice);
     return true;
 }

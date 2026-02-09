@@ -3,6 +3,7 @@
 #include "SystemProcessDefender.h"
 #include "FileScanner.h"
 #include "VirusTotalManager.h"
+#include "ServiceControlManager.h"
 //#include <chrono>
 // 
  // Used when user tries to close the program (for handling proper threads joining)
@@ -124,6 +125,7 @@ static std::atomic<bool> dmicspInProgress(false);
 static std::atomic<bool> sapfbsInProgress(false);
 static std::atomic<bool> ssptseInProgress(false);
 static std::atomic<bool> vt_srpadInProgress(false);
+static std::atomic<bool> scm_ickInProgress(false);
 
 
 // Run the main window
@@ -456,6 +458,28 @@ void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open)
         }
         ImGui::SameLine();
         ImGui::TextWrapped("(VirusTotal) ScanRunningProcessesAndDrivers()");
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##vt_ickRunButton"))
+        {
+            if (!scm_ickInProgress)
+            {
+                if (workerThreads.at(6).joinable())
+                    workerThreads.at(6).join();
+
+                scm_ickInProgress = true;
+                workerThreads.at(6) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                                           
+                    if (ServiceControlManager::CreateAndStartDriver())
+                    {
+                        ServiceControlManager::IntegrityCheckKernel();
+                        ServiceControlManager::StopDriverAndDeleteService();
+                    }
+                    scm_ickInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("Check Kernel Integrity(uses Driver)");
     }
     ImGui::End();
 }

@@ -28,6 +28,41 @@ private:
             return h != nullptr;
         }
     };
+
+#define MAX_PATH_LEN 260
+#define MAX_SECTION_LEN 16
+#define MAX_PATCH_BYTES 64  // Only capture first 64 bytes of the hook
+
+    typedef struct _Code_Patch
+    {
+        char FilePath[MAX_PATH_LEN];
+        char SectionName[MAX_SECTION_LEN];
+        ULONG RVA;
+        ULONG Length;
+        unsigned char OriginalBytes[MAX_PATCH_BYTES];
+        unsigned char ActualBytes[MAX_PATCH_BYTES];
+    } Code_Patch, * PCode_Patch;
+
+    // Header to tell User Mode how many items follow
+    typedef struct _SCAN_RESULTS_HEADER {
+        ULONG Count;
+        // PATCH_RESULT_ENTRY Entries[Count]; // Variable length array follows
+    } SCAN_RESULTS_HEADER, * PSCAN_RESULTS_HEADER;
+
+    typedef struct _PATCH_NODE {
+        LIST_ENTRY ListEntry;
+        Code_Patch Data;
+    } PATCH_NODE, * PPATCH_NODE;
+
+    struct CodePatch_UM 
+    {
+        char* FilePath;
+        char* SectionName;
+        ULONG RVA;
+        ULONG Length;
+        unsigned char* OriginalBytes;
+        unsigned char* ActualBytes;
+    };
     
     static const DWORD DEFAULT_WAIT_MS = 10000;
     inline static const std::wstring deviceName = L"OpenAV";
@@ -50,8 +85,12 @@ private:
 
 public:
     static bool CreateAndStartDriver(const std::wstring& serviceName = serviceName, const std::wstring& driverFileName = driverFileName);
+
     static bool StopDriverAndDeleteService(const std::wstring& serviceName = serviceName);
+
     static bool ExampleIOCTLCall(const std::wstring& deviceName = deviceName);
+
+    static bool IntegrityCheckKernel(const std::wstring& deviceName = deviceName);
 };
 
 

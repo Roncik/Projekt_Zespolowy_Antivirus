@@ -15,6 +15,21 @@ public:
 		std::string Status = "";
 		std::string Description = "";
 		std::string Extra_info = "";
+
+		std::string ToString()
+		{
+			std::stringstream output;
+			output << "Type: " << Type << std::endl;
+			output << "Module_name: " << Module_name << std::endl;
+			output << "Date: " << Date << std::endl;
+			output << "Location: " << Location << std::endl;
+			output << "Filename: " << Filename << std::endl;
+			output << "Action: " << Action << std::endl;
+			output << "Status: " << Status << std::endl;
+			output << "Description: " << Description << std::endl;
+			output << "Extra_info: " << Extra_info << std::endl;
+			return output.str();
+		}
 	};
 	inline static std::vector<std::unique_ptr<log_entry>> Logs;
 

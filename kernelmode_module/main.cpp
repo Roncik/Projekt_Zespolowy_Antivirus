@@ -17,6 +17,9 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 
     UNREFERENCED_PARAMETER(RegistryPath);
 
+    // Init globals
+    ExInitializeFastMutex(&IntegrityChecker::ResultMutex);
+    InitializeListHead(&IntegrityChecker::ResultListHead);
     status = AuxKlibInitialize();
     if (!NT_SUCCESS(status)) 
     {
@@ -51,9 +54,6 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
     deviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
 
     DbgPrintEx(0, 0, "Driver loaded\n");
-
-    // For testing, will be moved to IOCTL
-    IntegrityChecker::ScanAllKernelModules();
 
     return STATUS_SUCCESS;
 }

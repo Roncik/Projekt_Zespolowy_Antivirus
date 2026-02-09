@@ -128,6 +128,15 @@ NTSTATUS IntegrityChecker::VerifyDriver(AUX_MODULE_EXTENDED_INFO* module)
                     {
                         Helpers::Log("[!] DETECTED: %s (Section: %.8s) | Offset: 0x%X | Length: %u bytes\n",
                             module->FullPathName + module->FileNameOffset, section->Name, currentChainStart, consecutiveMismatches);
+
+                        ReportPatch(
+                            (char*)(module->FullPathName + module->FileNameOffset),
+                            (char*)section->Name,
+                            section->VirtualAddress + currentChainStart,
+                            consecutiveMismatches,
+                            &diskContent[currentChainStart],
+                            &memContent[currentChainStart]
+                        );
                     }
                     consecutiveMismatches = 0;
                     continue;
@@ -155,6 +164,15 @@ NTSTATUS IntegrityChecker::VerifyDriver(AUX_MODULE_EXTENDED_INFO* module)
                             section->VirtualAddress + currentChainStart,
                             consecutiveMismatches);
 
+                        ReportPatch(
+                            (char*)(module->FullPathName + module->FileNameOffset),
+                            (char*)section->Name,
+                            section->VirtualAddress + currentChainStart,
+                            consecutiveMismatches,
+                            &diskContent[currentChainStart],
+                            &memContent[currentChainStart]
+                        );
+
                         // Optional: Print the bytes to DebugView
                     }
 
@@ -174,6 +192,52 @@ NTSTATUS IntegrityChecker::VerifyDriver(AUX_MODULE_EXTENDED_INFO* module)
 
     ExFreePool(fileBuffer);
     return STATUS_SUCCESS;
+}
+
+void IntegrityChecker::ReportPatch(const char* path, const char* section, ULONG rva, ULONG len, PUCHAR disk, PUCHAR mem)
+{
+    PPATCH_NODE node = (PPATCH_NODE)ExAllocatePoolWithTag(NonPagedPool, sizeof(PATCH_NODE), DRIVER_TAG);
+    if (!node)
+        return;
+
+    RtlZeroMemory(node, sizeof(PATCH_NODE));
+
+    // Fill Flat Data
+    RtlStringCbCopyA(node->Data.FilePath, MAX_PATH_LEN, path);
+    RtlStringCbCopyA(node->Data.SectionName, MAX_SECTION_LEN, section);
+    node->Data.RVA = rva;
+    node->Data.Length = len;
+
+    // Cap the bytes we capture to avoid overflowing the struct
+    ULONG captureLen = (len > MAX_PATCH_BYTES) ? MAX_PATCH_BYTES : len;
+
+    // Safety check for pointers
+    __try {
+        if (disk) RtlCopyMemory(node->Data.OriginalBytes, disk, captureLen);
+        if (mem)  RtlCopyMemory(node->Data.ActualBytes, mem, captureLen);
+    }
+    __except (1) {
+        // Access violation reading bytes, ignore
+    }
+
+    // Lock and Add to List
+    ExAcquireFastMutex(&ResultMutex);
+    InsertTailList(&ResultListHead, &node->ListEntry);
+    ResultCount++;
+    ExReleaseFastMutex(&ResultMutex);
+}
+
+void IntegrityChecker::ClearResults()
+{
+    ExAcquireFastMutex(&ResultMutex);
+    while (!IsListEmpty(&ResultListHead)) 
+    {
+        PLIST_ENTRY entry = RemoveHeadList(&ResultListHead);
+        PPATCH_NODE node = CONTAINING_RECORD(entry, PATCH_NODE, ListEntry);
+        ExFreePoolWithTag(node, DRIVER_TAG);
+    }
+    ResultCount = 0;
+    ExReleaseFastMutex(&ResultMutex);
 }
 
 

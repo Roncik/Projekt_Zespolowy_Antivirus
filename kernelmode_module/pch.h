@@ -6,6 +6,7 @@
 #include <aux_klib.h>
 #include <ntstrsafe.h>
 
+
 #if defined(UNICODE)
 # define RtlStringCbPrintf RtlStringCbPrintfA
 #else
