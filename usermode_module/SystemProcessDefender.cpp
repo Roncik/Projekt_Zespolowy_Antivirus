@@ -597,7 +597,13 @@ bool SystemProcessDefender::ScanSystemProcessesThreadsSuspiciousExecution(std::v
         std::vector<SystemProcessDefender::ThreadSuspicious> outSuspiciousThreads;
         if (!this->CheckThreadsExecution(process.pid, outSuspiciousThreads))
         {
-            std::wstring filenamewstr = process.path.substr(process.path.find_last_of('\\'));
+            std::wstring filenamewstr;
+            try
+            {
+                filenamewstr = process.path.substr(process.path.find_last_of('\\'));
+            }
+            catch (...) {}
+            
             
             LogsManager::log_entry logentry;
             logentry.Type = "Error";
@@ -616,7 +622,12 @@ bool SystemProcessDefender::ScanSystemProcessesThreadsSuspiciousExecution(std::v
 
         for (auto& suspiciousThread : outSuspiciousThreads)
         {
-            std::wstring filenamewstr = process.path.substr(process.path.find_last_of('\\'));
+            std::wstring filenamewstr;
+            try
+            {
+                filenamewstr = process.path.substr(process.path.find_last_of('\\'));
+            }
+            catch (...) {}
 
             std::ostringstream extra_info_ss;
             extra_info_ss << "Thread with ID: " << suspiciousThread.threadID << " was found to be executing memory at: " << std::hex << suspiciousThread.instructionPointer << ". This memory address is outside of original executable memory ranges.";

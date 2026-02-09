@@ -145,6 +145,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ExceptionFilters.cpp" />
     <ClCompile Include="FileScanner.cpp" />
     <ClCompile Include="HTTPSManager.cpp" />
     <ClCompile Include="ImGUIManager.cpp" />
@@ -234,6 +235,7 @@
     <ClCompile Include="VirusTotalManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ExceptionFilters.h" />
     <ClInclude Include="FileScanner.h" />
     <ClInclude Include="HTTPSManager.h" />
     <ClInclude Include="ImGUIManager.h" />

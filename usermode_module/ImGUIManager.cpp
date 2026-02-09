@@ -3,12 +3,6 @@
 #include "SystemProcessDefender.h"
 #include "FileScanner.h"
 #include "VirusTotalManager.h"
-#include <mutex>
-#include <thread>
-#include <atomic>
-#include <vector>
-#include <memory>
-#include <map>
 //#include <chrono>
 // 
  // Used when user tries to close the program (for handling proper threads joining)
@@ -113,8 +107,8 @@ struct MainWindowData
 };
 
 // using SystemProcessDefender.cpp logging behaviour
-std::vector<std::unique_ptr<LogsManager::log_entry>> logQueue{};        // Inter-thread queue, periodically joined into LogsManager::Logs and flushed
-std::mutex lQ_mutex;
+std::vector<std::unique_ptr<LogsManager::log_entry>> ImGUIManager::logQueue{};        // Inter-thread queue, periodically joined into LogsManager::Logs and flushed
+std::mutex ImGUIManager::lQ_mutex;
 
 // Objects needed to call their class' methods
 static SystemProcessDefender spd;

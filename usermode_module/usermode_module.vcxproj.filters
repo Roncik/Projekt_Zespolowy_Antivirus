@@ -40,6 +40,9 @@
     <Filter Include="TemporaryHelpers">
       <UniqueIdentifier>{1191e638-ad65-4227-9b4c-a93176d757e0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ExceptionFilters">
+      <UniqueIdentifier>{700d9478-a811-473d-8cb3-3ad06779b262}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -105,6 +108,9 @@
     <ClCompile Include="TemporaryHelpers.cpp">
       <Filter>TemporaryHelpers</Filter>
     </ClCompile>
+    <ClCompile Include="ExceptionFilters.cpp">
+      <Filter>ExceptionFilters</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -169,6 +175,9 @@
     </ClInclude>
     <ClInclude Include="TemporaryHelpers.h">
       <Filter>TemporaryHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="ExceptionFilters.h">
+      <Filter>ExceptionFilters</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -29,6 +29,8 @@
 #include <d3dx9.h>
 #include <tchar.h>
 #include <winioctl.h>
+#include <atomic>
+#include <memory>
 
 #pragma comment(lib, "Psapi.lib")
 #pragma comment(lib, "Wintrust.lib")

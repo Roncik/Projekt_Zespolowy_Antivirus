@@ -7,10 +7,15 @@
 #include "ProcessManager.h"
 #include "ImGUIManager.h"
 #include "ServiceControlManager.h"
+#include "ExceptionFilters.h"
 //#include "LogsManager.h"
 
 int main()
 {
+    SetUnhandledExceptionFilter(ExceptionFilters::SimplestCrashHandler);
+
+
+    
     //Scan all files in the system for blacklisted hash
     {
         /*FileScanner fileScanner;

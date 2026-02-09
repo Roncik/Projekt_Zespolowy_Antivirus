@@ -141,6 +141,9 @@ public:
     void CleanupDeviceD3D();
     void ResetDevice();
 
+    static std::vector<std::unique_ptr<LogsManager::log_entry>> logQueue;
+    static std::mutex lQ_mutex;
+
     // Win32 message handler
    // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
    // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
