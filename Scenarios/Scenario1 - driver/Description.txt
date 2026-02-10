@@ -1,0 +1,8 @@
+Malware places a code detour inside a codecave of iorate.sys and creates a system thread there. 
+It does that to hide execution of manually mapped code in kernel memory space. 
+The code is now "linked" to a legitimate driver.
+
+Antivirus can find this patch by verifying legitimate driver's code integrity.
+It does that by comparing whats on file with whats loaded in memory(mismatch means code was modified during runtime).
+We then use heuristics to filter out false positives of such checks.
+False positives here are caused by: Spectre mitigation, ASLR relocations, rebasing, Warbird and more.

@@ -34,7 +34,7 @@ public:
 	inline static std::vector<std::unique_ptr<log_entry>> Logs;
 
 private:
-	static const uint8_t log_entry_num_of_fields = 9;
+	static constexpr uint8_t log_entry_num_of_fields = 9;
 	inline static std::wstring LogsDatabasePath = L"logs.txt";
 
 public:

@@ -62,3 +62,23 @@ Provides methods:
 - **CleanupDeviceD3D** - Clear the D3D9 device.
 - **ResetDevice** - Reset the D3D9 device.
 - **WndProc** - Callback for handling messages sent to the GUI window. Tries ImGUI callback first, if it fails it falls back to default handler.
+
+## LogsManager Class
+Provides the Log struct and the following methods:
+
+- **Log** - Saves a log to a global logs list and to file.
+- **ExportLogToFile** - Saves the log to file
+- **ReadLogsFromFile** - Reads logs from file into memory
+
+## ServiceControlManager
+Provides methods for controlling the OpenAV driver - creating, starting, stopping, deleting, communication
+
+- **WaitForServiceStatus** - Helper function that awaits service status update via Windows ServiceController.
+- **EnsureDriverServiceExists** - If the driver's service doesn't exist this creates one, if it does exist this updates the existing one.
+- **StartDriverService** - Starts the driver's registered service.
+- **IsDriverServiceRunning** - Helper function for checking driver's service status.
+- **StopDriverService** - Stops the driver's registered service.
+- **DeleteDriverService** - Deletes the driver's registered service.
+- **CreateAndStartDriver** - Wrapper for registering the service and starting the driver.
+- **StopDriverAndDeleteService** - Wrapper for stopping the driver and deleting the service.
+- **IntegrityCheckKernel** - Calls the driver's Kernel Integrity Check function and retrieves the result.

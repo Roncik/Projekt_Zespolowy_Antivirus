@@ -385,7 +385,8 @@ bool SystemProcessDefender::ScanExecutableMemoryForSignatures(DWORD pid, const s
 
 bool SystemProcessDefender::ScanAllProcessesForBlacklistedSignatures(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex)
 {
-    std::pair<std::string, std::wstring> exampleSig("48 B8 ? ? ? ? ? ? ? ? FF E0", L"hook_sig1");
+    std::pair<std::string, std::wstring> exampleSig("48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B D9 49 8B F8 48 8B 49 10 48 8B F2 48 8B 43 08 48 2B 03 48 2B 0B 49 03 C0 48 3B C1 72 1A 48 8D 04 09 49 8B D0 4C 3B C0 48 8B CB 48 0F 42 D0 E8 B4 FE FF FF 84 C0 74 33 48 8B 4B 08 48 8B 43 10 48 2B C1 48 3B 4B 10 48 1B D2 48 23 D0 48 85 FF 74 0F 4C 8B CF 4C 8B C6 E8 8B D5 FF FF", L"notepad_sig1"); //48 B8 ? ? ? ? ? ? ? ? FF E0
+    
     SignatureManager::AddCodeSignatureToDatabase(exampleSig);
 
     std::vector<ProcessManager::ProcessInfo> processes;
@@ -434,6 +435,7 @@ bool SystemProcessDefender::ScanAllProcessesForBlacklistedSignatures(std::vector
             lQ_ulock.unlock();
         }
     }
+    return true;
 }
 
 // Check each thread's current instruction pointer and verify it's inside an executable section of main module.

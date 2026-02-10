@@ -1,0 +1,3 @@
+Malicious process is running in usermode space.
+
+Antivirus detects the process as malicious with help of VirusTotal.

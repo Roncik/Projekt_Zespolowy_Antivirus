@@ -340,7 +340,7 @@ bool ServiceControlManager::IntegrityCheckKernel(const std::wstring& deviceName)
         };
         //build extra info
         std::stringstream extrainfoss;
-        extrainfoss << "Section: " << patch.SectionName << ". Original bytes: ";
+        extrainfoss << "Section: " << patch.SectionName << ". RVA: " << std::hex << patch.RVA << ".Original bytes : ";
         for (int i = 0; i < patch.Length; ++i)
             extrainfoss << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << static_cast<int>((unsigned char)patch.OriginalBytes[i]) << " ";
         extrainfoss << ". Actual bytes: ";
