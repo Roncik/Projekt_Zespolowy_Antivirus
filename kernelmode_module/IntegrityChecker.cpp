@@ -31,7 +31,8 @@ NTSTATUS IntegrityChecker::ReadFileFromDisk(PCHAR inputPath, PVOID* Buffer, SIZE
             if (inputPath[1] == ':' && inputPath[2] == '\\') 
                 RtlStringCbPrintfA(attemptPath, 260, "\\??\\%s", inputPath);
             else if 
-                (_strnicmp(inputPath, "\\Windows\\", 9) == 0) RtlStringCbPrintfA(attemptPath, 260, "\\SystemRoot%s", inputPath + 8);
+                (_strnicmp(inputPath, "\\Windows\\", 9) == 0) 
+                RtlStringCbPrintfA(attemptPath, 260, "\\SystemRoot%s", inputPath + 8);
             else 
                 RtlStringCbPrintfA(attemptPath, 260, "%s", inputPath);
         }
@@ -50,7 +51,8 @@ NTSTATUS IntegrityChecker::ReadFileFromDisk(PCHAR inputPath, PVOID* Buffer, SIZE
             ZwQueryInformationFile(handle, &ioStatus, &fi, sizeof(fi), FileStandardInformation);
             *Size = fi.EndOfFile.LowPart;
             *Buffer = ExAllocatePoolWithTag(NonPagedPool, *Size, DRIVER_TAG);
-            if (*Buffer) ZwReadFile(handle, NULL, NULL, NULL, &ioStatus, *Buffer, (ULONG)*Size, NULL, NULL);
+            if (*Buffer) 
+                ZwReadFile(handle, NULL, NULL, NULL, &ioStatus, *Buffer, (ULONG)*Size, NULL, NULL);
             ZwClose(handle);
             RtlFreeUnicodeString(&uPath);
             return *Buffer ? STATUS_SUCCESS : STATUS_INSUFFICIENT_RESOURCES;
