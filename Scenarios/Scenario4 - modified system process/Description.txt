@@ -1,0 +1,4 @@
+Malware modified code of a system process to gain control of the execution flow and exploit system process's elevated privileges.
+
+Antivirus detects the code patch by comparing on-file version with whats loaded in RAM.
+

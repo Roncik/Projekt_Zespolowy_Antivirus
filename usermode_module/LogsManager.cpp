@@ -1,9 +1,9 @@
 #include "pch.h"
 #include "LogsManager.h"
-
-//static member definitions
-std::vector<LogsManager::log_entry> LogsManager::Logs;
-std::wstring LogsManager::LogsDatabasePath = L"logs.txt";
+#include <ostream>
+#include <sstream>
+#include <iostream>
+#include <string>
 
 std::string LogsManager::GetCurrentDate()
 {
@@ -16,33 +16,19 @@ std::string LogsManager::GetCurrentDate()
 
     std::ostringstream oss;
 
-    oss << std::put_time(&tm, "%Y/%m/%d %H:%M"); // YYYY/mm/dd HH:MM
+    oss << std::put_time(&tm, "%Y/%m/%d %H:%M:%S"); // YYYY/mm/dd HH:MM:SS
     return oss.str();
 }
 
-bool LogsManager::Log(std::string Type, std::string Module_name, bool Dont_save_to_file, std::optional<std::string> Date, std::optional<std::string> Location, std::optional<std::string> Filename,
-    std::optional<std::string> Action, std::optional<std::string> Status, std::optional<std::string> Description, std::optional<std::string> Extra_info)
+bool LogsManager::Log(log_entry logEntry, bool Dont_save_to_file)
 {
-    LogsManager::log_entry entry = 
-    {
-    Type,
-    Module_name,
-    Date ? *Date : this->GetCurrentDate(),
-    Location ? *Location : "",
-    Filename ? *Filename : "",
-    Action ? *Action : "",
-    Status ? *Status : "",
-    Description ? *Description : "",
-    Extra_info ? *Extra_info : ""
-    };
-
     if (!Dont_save_to_file)
     {
-        if (!this->ExportLogToFile(entry))
+        if (!LogsManager::ExportLogToFile(logEntry))
             return false;
     }
 
-    LogsManager::Logs.push_back(entry);
+    LogsManager::Logs.push_back(std::make_unique<LogsManager::log_entry>(logEntry));
     
     return true;
 }
@@ -62,7 +48,7 @@ bool LogsManager::ExportLogToFile(log_entry Log, std::wstring FilePath, char Sep
 
 }
 
-bool LogsManager::ReadLogsFromFile(std::vector<log_entry>& LogsList, std::wstring FilePath, char SeparatorSign)
+bool LogsManager::ReadLogsFromFile(std::vector<std::unique_ptr<log_entry>>& LogsList, std::wstring FilePath, char SeparatorSign)
 {
     std::ifstream database(FilePath);
     if (!database)
@@ -86,7 +72,8 @@ bool LogsManager::ReadLogsFromFile(std::vector<log_entry>& LogsList, std::wstrin
         if (fields.size() != LogsManager::log_entry_num_of_fields)
             continue;
 
-        LogsList.push_back({fields[0], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6], fields[7], fields[8]});
+        LogsManager::log_entry log = { fields[0], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6], fields[7], fields[8] };
+        LogsList.push_back(std::make_unique<LogsManager::log_entry>(log));
     }
     
     return true;

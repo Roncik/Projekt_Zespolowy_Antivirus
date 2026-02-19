@@ -1,12 +1,24 @@
 #include "pch.h"
 #include "ImGUIManager.h"
+#include "SystemProcessDefender.h"
+#include "FileScanner.h"
+#include "VirusTotalManager.h"
+#include "ServiceControlManager.h"
+//#include <chrono>
+// 
+ // Used when user tries to close the program (for handling proper threads joining)
+ bool isTryingToExit = false;
+
+// -----------------------------------------------------------------------
+// ------------------------ D3DX9 + WIN32 --------------------------------
+// -----------------------------------------------------------------------
 
 //static member definitions
- LPDIRECT3D9              ImGUIManager::g_pD3D = nullptr;
- LPDIRECT3DDEVICE9        ImGUIManager::g_pd3dDevice = nullptr;
- bool                     ImGUIManager::g_DeviceLost = false;
- UINT                     ImGUIManager::g_ResizeWidth = 0, ImGUIManager::g_ResizeHeight = 0;
- D3DPRESENT_PARAMETERS    ImGUIManager::g_d3dpp = {};
+LPDIRECT3D9              ImGUIManager::g_pD3D = nullptr;
+LPDIRECT3DDEVICE9        ImGUIManager::g_pd3dDevice = nullptr;
+bool                     ImGUIManager::g_DeviceLost = false;
+UINT                     ImGUIManager::g_ResizeWidth = 0, ImGUIManager::g_ResizeHeight = 0;
+D3DPRESENT_PARAMETERS    ImGUIManager::g_d3dpp = {};
 
 bool ImGUIManager::CreateDeviceD3D(HWND hWnd)
 {
@@ -71,6 +83,9 @@ LRESULT __stdcall ImGUIManager::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
                 return 0;
             break;
+        case WM_CLOSE:  // For joining threads
+            isTryingToExit = true;
+            return 0;
         case WM_DESTROY:
             ::PostQuitMessage(0);
             return 0;
@@ -79,16 +94,51 @@ LRESULT __stdcall ImGUIManager::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
     }
 }
 
-int ImGUIManager::example()
+// -----------------------------------------------------------------------
+// -------------------------- GUI CORE -----------------------------------
+// -----------------------------------------------------------------------
+
+// Data shared between different functions of the main window
+struct MainWindowData
+{
+    // Panels (child windows of the main window)
+    bool showActiveProtectionConfigPanel = true;
+    //bool showActiveProtectionConsoleOutputPanel = false; // its just the logger example despite the name
+    bool showActiveProtectionOutputPanel = true;
+};
+
+// using SystemProcessDefender.cpp logging behaviour
+std::vector<std::unique_ptr<LogsManager::log_entry>> ImGUIManager::logQueue{};        // Inter-thread queue, periodically joined into LogsManager::Logs and flushed
+std::mutex ImGUIManager::lQ_mutex;
+
+// Objects needed to call their class' methods
+static SystemProcessDefender spd;
+static FileScanner fileScanner;
+static VirusTotalManager vtmgr = VirusTotalManager(L"c164bc01db151497cc74f370c2b8d4f41d020d79030db9b9db7eca737869e99e", L"hashdb.txt"); //VirusTotal API key https://www.virustotal.com/gui/my-apikey 
+
+// Vector of threads running different antivirus functionalities (for now 10 slots for 10 functionalities)
+std::vector<std::thread> workerThreads(10);
+// Atomics signifying if worker threads are running
+static std::atomic<bool> sspfsmaInProgress(false);  // outdated, delete this one
+static std::atomic<bool> sad_md5InProgress(false);
+static std::atomic<bool> dmicspInProgress(false);
+static std::atomic<bool> sapfbsInProgress(false);
+static std::atomic<bool> ssptseInProgress(false);
+static std::atomic<bool> vt_srpadInProgress(false);
+static std::atomic<bool> scm_ickInProgress(false);
+
+
+// Run the main window
+int ImGUIManager::RunUI()
 {
     // Make process DPI aware and obtain main monitor scale
     ImGui_ImplWin32_EnableDpiAwareness();
     float main_scale = ImGui_ImplWin32_GetDpiScaleForMonitor(::MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY));
 
     // Create application window
-    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, this->WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
+    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, this->WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"Antivirus Student Project", nullptr };
     ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Dear ImGui DirectX9 Example", WS_OVERLAPPEDWINDOW, 100, 100, (int)(1280 * main_scale), (int)(800 * main_scale), nullptr, nullptr, wc.hInstance, nullptr);
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Antivirus Student Project", WS_OVERLAPPEDWINDOW, 100, 100, (int)(800 * main_scale), (int)(600 * main_scale), nullptr, nullptr, wc.hInstance, nullptr);
 
     // Initialize Direct3D
     if (!CreateDeviceD3D(hwnd))
@@ -102,12 +152,16 @@ int ImGUIManager::example()
     ::ShowWindow(hwnd, SW_SHOWDEFAULT);
     ::UpdateWindow(hwnd);
 
+    // Window data
+    static MainWindowData mwData;
+
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+    ImGuiIO& io = ImGui::GetIO(); (void)io;                   
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls    
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable window/panel docking
+    io.ConfigFlags |= ImGuiWindowFlags_NoMove;                // Main panel non-movable    
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -138,13 +192,11 @@ int ImGUIManager::example()
     //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf");
     //IM_ASSERT(font != nullptr);
 
-    // Our state
-    bool show_demo_window = true;
-    bool show_another_window = false;
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+    // Used when rendering
+    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);         
 
-    // GUI Navigation variables
-    uint8_t main_nav_bar = 0;
+    // Used when user wants to skip waiting for threads to join when closing the program
+    bool isForcingQuit = false;
 
     // Main loop
     bool done = false;
@@ -157,9 +209,10 @@ int ImGUIManager::example()
         {
             ::TranslateMessage(&msg);
             ::DispatchMessage(&msg);
-            if (msg.message == WM_QUIT)
-                done = true;
+            if (msg.message == WM_QUIT)        
+                done = true;            
         }
+
         if (done)
             break;
 
@@ -190,93 +243,58 @@ int ImGUIManager::example()
         ImGui_ImplDX9_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
-        ImGui::SetNextWindowPos({ 0,0 }, ImGuiCond_Once);
-        ImGui::SetNextWindowSize({ (1280 * main_scale), (800 * main_scale) });
-        ImGui::SetNextWindowBgAlpha(1.0f);
+        ImGui::DockSpaceOverViewport();       
 
-        if (ImGui::Begin("Main window", 0,
-            ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoSavedSettings |
-            ImGuiWindowFlags_NoCollapse |
-            ImGuiWindowFlags_NoScrollbar |
-            ImGuiWindowFlags_NoTitleBar |
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_MenuBar))
+        // User closing the app while worker threads are still working
+        if (isTryingToExit)
         {
-            if (ImGui::BeginMenuBar())
+            ImGui::OpenPopup("Quitting...");
+
+            // Always center this window when appearing
+            ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+            if (ImGui::BeginPopupModal("Quitting...", NULL, ImGuiWindowFlags_AlwaysAutoResize))
             {
-                if (ImGui::BeginMenu("scanner"))
+                ImGui::Text("Waiting for all threads\nto finish their work...\n");
+                ImGui::Separator();
+
+                if (!(sspfsmaInProgress || sad_md5InProgress || dmicspInProgress || sapfbsInProgress || ssptseInProgress || vt_srpadInProgress))   // Scanning threads finished their work
+                    done = true;
+
+                if (ImGui::Button("Go Back", ImVec2(120, 0)))
                 {
-                    ImGui::Text("some text");
-                    
-                    ImGui::EndMenu();
+                    isTryingToExit = false;
+                    ImGui::CloseCurrentPopup();
                 }
-                
-                ImGui::EndMenuBar();
+                ImGui::SameLine();
+                if (ImGui::Button("Force Quit")) 
+                {
+                    isForcingQuit = true;
+                    done = true;
+                }                
+                ImGui::EndPopup();
             }
-            
-            
-            
-            /*ImGui::SetCursorPos({ 0,0 });
-            if (ImGui::BeginChild(1, { (1280 * main_scale), (50 * main_scale) }))
-            {
-                float offset_to_next_button = 0.f;
-
-                ImGui::SetCursorPos({ offset_to_next_button,0 });
-                if (ImGui::Button("Scanner", { (80 * main_scale), (50 * main_scale) }))
-                    main_nav_bar = 0;
-                offset_to_next_button += 80.f;
-
-
-                ImGui::SetCursorPos({ offset_to_next_button,0 });
-                if (ImGui::Button("Active\nScanning", { (80 * main_scale), (50 * main_scale) }))
-                    main_nav_bar = 1;
-                offset_to_next_button += 80.f;
-            }
-            ImGui::EndChild();*/
-
         }
-        ImGui::End();
-
-
-
-
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
-
-        //// 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-        //{
-        //    static float f = 0.0f;
-        //    static int counter = 0;
-
-        //    ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-        //    ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-        //    ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-        //    ImGui::Checkbox("Another Window", &show_another_window);
-
-        //    ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-        //    ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-        //    if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-        //        counter++;
-        //    ImGui::SameLine();
-        //    ImGui::Text("counter = %d", counter);
-
-        //    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-        //    ImGui::End();
-        //}
-
-        //// 3. Show another simple window.
-        //if (show_another_window)
-        //{
-        //    ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-        //    ImGui::Text("Hello from another window!");
-        //    if (ImGui::Button("Close Me"))
-        //        show_another_window = false;
-        //    ImGui::End();
-        //}
+        
+        // Show panels user chose as visible using menu options
+        if (mwData.showActiveProtectionConfigPanel)         
+            ShowActiveProtectionConfigPanel(&mwData.showActiveProtectionConfigPanel);         
+        if (mwData.showActiveProtectionOutputPanel)        
+            ShowActiveProtectionOutputPanel(&mwData.showActiveProtectionOutputPanel);
+        
+        // Create the always-visible main menu bar over the main viewport
+        if (ImGui::BeginMainMenuBar())
+        {            
+            if (ImGui::BeginMenu("Panels"))
+            {
+                if (ImGui::MenuItem("Active protection config", NULL, mwData.showActiveProtectionConfigPanel))                
+                    mwData.showActiveProtectionConfigPanel = !mwData.showActiveProtectionConfigPanel;                                
+                if (ImGui::MenuItem("Active protection console output", NULL, mwData.showActiveProtectionOutputPanel))
+                    mwData.showActiveProtectionOutputPanel = !mwData.showActiveProtectionOutputPanel;                                
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }                     
 
         // Rendering
         ImGui::EndFrame();
@@ -296,6 +314,16 @@ int ImGUIManager::example()
             ImGUIManager::g_DeviceLost = true;
     }
 
+    // Ensuring all threads finish work if the user chooses to quit the app without forcing it
+    if (!isForcingQuit)
+    {
+        for (auto& thread : workerThreads)
+        {
+            if (thread.joinable())
+                thread.join();            
+        }
+    }
+
     // Cleanup
     ImGui_ImplDX9_Shutdown();
     ImGui_ImplWin32_Shutdown();
@@ -306,4 +334,466 @@ int ImGUIManager::example()
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
 
     return 0;
+}
+
+// -----------------------------------------------------------------------
+// ------------------------- PANELS (SUBWINDOWS) -------------------------
+// -----------------------------------------------------------------------
+
+// A panel to launch different scanning modules on demand
+// (In the future: A panel to configure which scanning modules are to be actively running during
+// program execution)
+void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open)
+{    
+    ImGui::SetNextWindowSize(ImVec2(80, 160), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Active protection config", p_open))
+    {                
+        ImGui::TextWrapped("Choose which scan to launch:");            
+        
+        ImGui::Separator();
+        if (ImGui::Button("Run##sspfsmaRunButton"))
+        {
+            if (!sspfsmaInProgress)
+            {
+                if (workerThreads.at(0).joinable())
+                    workerThreads.at(0).join();
+
+                sspfsmaInProgress = true;
+                workerThreads.at(0) = std::thread([](){   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
+                    spd.ScanSystemProcessesForSuspiciousMemAllocations(logQueue, lQ_mutex);
+                    sspfsmaInProgress = false;
+                });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("ScanSystemProcessesForSuspiciousMemAllocations() - outdated, only for concurrency test");        
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##sad_md5RunButton"))
+        {
+            if (!sad_md5InProgress)
+            {
+                if (workerThreads.at(1).joinable())
+                    workerThreads.at(1).join();
+
+                sad_md5InProgress = true;
+                workerThreads.at(1) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
+                        fileScanner.LoadBlacklist_MD5(".\\MD5Hashes\\merged_hashes.txt");
+                        fileScanner.ScanAllDirectories_MD5(logQueue, lQ_mutex);
+                        sad_md5InProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("ScanAllDirectories_MD5() - .\\MD5Hashes\\merged_hashes.txt has to be supplied");
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##dmicspRunButton"))
+        {
+            if (!dmicspInProgress)
+            {
+                if (workerThreads.at(2).joinable())
+                    workerThreads.at(2).join();
+
+                dmicspInProgress = true;
+                workerThreads.at(2) = std::thread([]() {
+                        spd.DiskMemoryIntegrityCheckSystemProcesses(logQueue, lQ_mutex);
+                        dmicspInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("DiskMemoryIntegrityCheckSystemProcesses()");
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##sapfbsRunButton"))
+        {
+            if (!sapfbsInProgress)
+            {
+                if (workerThreads.at(3).joinable())
+                    workerThreads.at(3).join();
+
+                sapfbsInProgress = true;
+                workerThreads.at(3) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
+                        spd.ScanAllProcessesForBlacklistedSignatures(logQueue, lQ_mutex);
+                        sapfbsInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("ScanAllProcessesForBlacklistedSignatures()");
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##ssptseRunButton"))
+        {
+            if (!ssptseInProgress)
+            {
+                if (workerThreads.at(4).joinable())
+                    workerThreads.at(4).join();
+
+                ssptseInProgress = true;
+                workerThreads.at(4) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
+                        spd.ScanSystemProcessesThreadsSuspiciousExecution(logQueue, lQ_mutex);
+                        ssptseInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("ScanSystemProcessesThreadsSuspiciousExecution()");
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##vt_srpadRunButton"))
+        {
+            if (!vt_srpadInProgress)
+            {
+                if (workerThreads.at(5).joinable())
+                    workerThreads.at(5).join();
+
+                vt_srpadInProgress = true;
+                workerThreads.at(5) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                                           
+                        vtmgr.ScanRunningProcessesAndDrivers(logQueue, lQ_mutex);
+                        vt_srpadInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("(VirusTotal) ScanRunningProcessesAndDrivers()");
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##vt_ickRunButton"))
+        {
+            if (!scm_ickInProgress)
+            {
+                if (workerThreads.at(6).joinable())
+                    workerThreads.at(6).join();
+
+                scm_ickInProgress = true;
+                workerThreads.at(6) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                                           
+                    if (ServiceControlManager::CreateAndStartDriver())
+                    {
+                        ServiceControlManager::IntegrityCheckKernel();
+                        ServiceControlManager::StopDriverAndDeleteService();
+                    }
+                    scm_ickInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("Check Kernel Integrity(uses Driver)");
+    }
+    ImGui::End();
+}
+
+// Provides the UI for browsing logs created by scanner modules
+// Communicates with a worker threads, checking a shared vector
+// for new elements (new lines output by the scanning module) and updating the UI text field
+void ImGUIManager::ShowActiveProtectionOutputPanel(bool* p_open)
+{
+    ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Active protection output", p_open, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {               
+        static bool logFileLoaded = false;
+        bool newLogWasAdded = false;
+        static bool logsNeedFiltering = false;
+
+        // Clears the log display
+        if (ImGui::Button("Clear"))
+        {     
+            LogsManager::Logs.clear();
+            logFileLoaded = false;
+            logsNeedFiltering = true;
+        }
+        // Loads logs from the logs file onto the display
+        ImGui::SameLine();
+        if (ImGui::Button("Load"))
+        {
+            if (!logFileLoaded) {
+                if (!LogsManager::ReadLogsFromFile())
+                    ;   // handle
+                else
+                {
+                    logFileLoaded = true;
+                    newLogWasAdded = true;
+                    logsNeedFiltering = true;
+                }
+            }
+        }
+        // Displays the searching/filtering logs interface
+        ImGui::SameLine();
+        ImGui::Text("Tools:");
+        ImGui::SameLine();
+        static bool searchPanelToggled = false;        
+        if (ImGui::Button("Search"))
+        {
+            searchPanelToggled = !searchPanelToggled;
+        }      
+        ImGui::SameLine();
+        static bool logDetailsViewerToggled = false;
+        if (ImGui::Button("Log Details"))
+        {
+            logDetailsViewerToggled = !logDetailsViewerToggled;
+        }
+        // Displays a checkbox to turn on auto-scrolling to bottom when new entries are displayed
+        ImGui::SameLine();
+        float textWidth = ImGui::CalcTextSize("Auto-scroll").x;
+        float checkboxWidth = ImGui::GetFrameHeight();
+        ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - textWidth - checkboxWidth - ImGui::GetStyle().ItemSpacing.x);
+        ImGui::Text("Auto-scroll");
+        ImGui::SameLine();
+        static bool autoScrollEnabled = true;
+        ImGui::Checkbox("##autoScrollCheckbox", &autoScrollEnabled);
+        ImGui::Dummy(ImVec2(0.0f, 1.0f));   // Blank vertical space
+        
+        // Getting the logs generated by scanning modules, synchronized through simple mutexes
+        static std::vector<std::unique_ptr<LogsManager::log_entry>> logBuffer{};
+        std::unique_lock<std::mutex> lQ_ulock(lQ_mutex, std::defer_lock);
+        lQ_ulock.lock();
+        logBuffer.insert(logBuffer.end(), std::make_move_iterator(logQueue.begin()),
+            std::make_move_iterator(logQueue.end()));
+        logQueue.clear();
+        lQ_ulock.unlock();
+       
+        // Writing to the log file                
+        if (logBuffer.size() > 0)
+        {
+            for (auto& log : logBuffer)
+            {
+                if (!LogsManager::Log(*log))
+                {
+                    // handle
+                }                                                            
+                LogsManager::Logs.push_back(std::move(log));
+            }
+            logBuffer.clear();
+            newLogWasAdded = true;
+            logsNeedFiltering = true;
+        }
+
+        static ImGuiTextFilter filter;
+        static std::vector<size_t> filteredIndices;        
+        // Log fields (corresponding to columns) are displayed in the table in a specific order from left-to-right, defined in this vector
+        const static std::vector<std::string> colsOrder{ "Date", "Type", "Module Name", "Location", "File Name", "Action", "Status", "Description", "Extra Info" };  // Need to adjust order in the for loop in the table creation below when changing this
+        static std::vector<bool> colsHidden(9, false);  // Is column of index corresponding to colsOrder tagged as hidden by the user?
+        // filterFlags says whether to include a particular field of the log_entry object
+        // in the text pool being searched/filtered for keywords using the filtering tool
+        // Each index corresponds to the same index in colsOrder
+        static std::vector<bool> filterFlags(9, true);
+
+        // Filter/search through logs tool's UI
+        if (searchPanelToggled)
+        {                       
+            ImGui::Separator();                 
+            ImGui::Text("Filter by: ");            
+            for (int i = 0; i < colsOrder.size(); i++)
+            {                
+                ImGui::SameLine();
+
+                float textWidth = ImGui::CalcTextSize(colsOrder[i].c_str()).x;
+                float selectablesWidth = textWidth + (ImGui::GetStyle().FramePadding.x * 2.0f);                
+                if (ImGui::Selectable(colsOrder[i].c_str(), filterFlags[i], 0, ImVec2(selectablesWidth, 0)))
+                {
+                    filterFlags[i] = !filterFlags[i];
+                    logsNeedFiltering = true;
+                }                
+            }
+
+            ImGui::Text("Search for:");
+            ImGui::SameLine();
+            if (filter.Draw("##TextFilterWidget", 180))
+                logsNeedFiltering = true;
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+            ImGui::Text("Input: [str1 str2 ...] for AND, [str1, str2, ...] for OR");
+            ImGui::PopStyleColor();
+            ImGui::Separator();
+        }
+
+        // Need this here, before filtering (the vector's values below are from last frame, but it shouldn't make a difference to human eye)
+        static std::vector<int> columnsTextColor(9, -1);   // -1 for hidden columns, default 
+                     
+        // Filtering the logs
+        if (logsNeedFiltering)
+        {
+            filteredIndices.clear();
+            for (int i = 0; i < LogsManager::Logs.size(); i++)
+            {
+                const auto& entry = LogsManager::Logs[i];
+                bool isAMatch = false;
+                
+                for (int j = 0; j < 9; j++)
+                {
+                    if (columnsTextColor[j] != -1 && filterFlags[j] == true)    // columnsTextColor[j] == -1 when column is hidden, no need to filter then
+                    {
+                        std::string fieldsName = colsOrder[j];
+                        if (fieldsName == "Type")
+                        {
+                            if (filter.PassFilter(entry->Type.c_str()))
+                                isAMatch = true;
+                        }
+                        if (fieldsName == "Module Name")
+                        {
+                            if (filter.PassFilter(entry->Module_name.c_str()))
+                                isAMatch = true;
+                        }
+                        if (fieldsName == "Date")
+                        {
+                            if (filter.PassFilter(entry->Date.c_str()))
+                                isAMatch = true;
+                        }
+                        if (fieldsName == "Location")
+                        {
+                            if (filter.PassFilter(entry->Location.c_str()))
+                                isAMatch = true;
+                        }
+                        if (fieldsName == "File Name")
+                        {
+                            if (filter.PassFilter(entry->Filename.c_str()))
+                                isAMatch = true;
+                        }
+                        if (fieldsName == "Action")
+                        {
+                            if (filter.PassFilter(entry->Action.c_str()))
+                                isAMatch = true;
+                        }
+                        if (fieldsName == "Status")
+                        {
+                            if (filter.PassFilter(entry->Status.c_str()))
+                                isAMatch = true;
+                        }
+                        if (fieldsName == "Description")
+                        {
+                            if (filter.PassFilter(entry->Description.c_str()))
+                                isAMatch = true;
+                        }
+                        if (fieldsName == "Extra Info")
+                        {
+                            if (filter.PassFilter(entry->Extra_info.c_str()))
+                                isAMatch = true;
+                        }                            
+                    }                    
+                }
+                if (isAMatch)
+                    filteredIndices.push_back(i);
+            }
+            logsNeedFiltering = false;
+        }
+
+        // Needed for the "details viewer" widget
+        static std::string selectedCell = "";   // If user clicks a cell of the below table, its contents are displayed in a different widget
+        static float logDetailsViewerHeight = 60.0f;
+        const float minLogDetailsViewerHeight = 8.0f;
+        
+        // Displaying the logs        
+        {
+            ImGui::Separator();            
+
+            const static ImGuiTableFlags tableFlags = ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Hideable;            
+            static ImVec2 tableSize;
+            if (logDetailsViewerToggled)
+                tableSize = { 0, -logDetailsViewerHeight };
+            else
+                tableSize = { 0,0 };
+
+            ImGui::BeginTable("LogsTable", 9, tableFlags, tableSize);
+            {
+                // Ensures headers stay in place while scrolling
+                ImGui::TableSetupScrollFreeze(0, 1);                
+                
+                // Column titles (headers)
+                for (auto& colTitle : colsOrder)
+                    ImGui::TableSetupColumn(colTitle.c_str());
+                ImGui::TableHeadersRow();
+                                
+                int visibleColumnsCount = 0;    // They are gonna be 1 for def text color, 2 for darker, -1 for hidden column
+                for (int column = 0; column < 9; column++)
+                {
+                     ImGuiTableColumnFlags colFlags = ImGui::TableGetColumnFlags(column);
+                     if (colFlags & ImGuiTableColumnFlags_IsEnabled)
+                     {
+                         columnsTextColor[column] = (visibleColumnsCount % 2) + 1;
+                         visibleColumnsCount++;
+                     }
+                     else
+                         columnsTextColor[column] = -1; // Hidden column
+                }
+
+                // Clipper makes it so only those LogsManager::Logs elements that the column scroll
+                // position indicates should be displayed are rendered
+                // So no wasting resources on looping through whole Logs vector
+                ImGuiListClipper clipper;
+                clipper.Begin(filteredIndices.size());
+                while (clipper.Step())
+                {
+                    for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+                    {
+                        ImGui::TableNextRow();
+                      
+                        size_t idx = filteredIndices[i];
+                        const auto& log = LogsManager::Logs[idx];                                            
+                        ImGUIManager::SetupLogsTableColumn(0, columnsTextColor[0], i, log->Date, selectedCell);
+                        ImGUIManager::SetupLogsTableColumn(1, columnsTextColor[1], i, log->Type, selectedCell);
+                        ImGUIManager::SetupLogsTableColumn(2, columnsTextColor[2], i, log->Module_name, selectedCell);
+                        ImGUIManager::SetupLogsTableColumn(3, columnsTextColor[3], i, log->Location, selectedCell);
+                        ImGUIManager::SetupLogsTableColumn(4, columnsTextColor[4], i, log->Filename, selectedCell);
+                        ImGUIManager::SetupLogsTableColumn(5, columnsTextColor[5], i, log->Action, selectedCell);
+                        ImGUIManager::SetupLogsTableColumn(6, columnsTextColor[6], i, log->Status, selectedCell);
+                        ImGUIManager::SetupLogsTableColumn(7, columnsTextColor[7], i, log->Description, selectedCell);
+                        ImGUIManager::SetupLogsTableColumn(8, columnsTextColor[8], i, log->Extra_info, selectedCell);
+                    }
+                }
+                if (autoScrollEnabled)
+                {
+                    if (newLogWasAdded)
+                        ImGui::SetScrollHereY(1.0f);    // Auto-scroll to the bottom when new logs being added
+                }
+            }
+            ImGui::EndTable();
+        }
+
+        // Selected log field display (strings can be too long and get their ends cut off in the table, this is here to help)
+        if (logDetailsViewerToggled)
+        {
+            ImGui::Separator();
+
+            // Dynamically resizeable height of the panel (splitter)
+            ImGui::Button("##Splitter", ImVec2(-1, 8.0f));
+            if (ImGui::IsItemActive())
+            {
+                logDetailsViewerHeight -= ImGui::GetIO().MouseDelta.y;
+                if (logDetailsViewerHeight < minLogDetailsViewerHeight)
+                    logDetailsViewerHeight = minLogDetailsViewerHeight;
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                        
+            ImGui::BeginChild("Details viewer", ImVec2(0, 0));
+            {
+                ImGui::Text("[CONTENTS]:");
+                ImGui::SameLine();
+                if (selectedCell.empty())
+                    ImGui::TextDisabled("Click on a cell to see its full contents...");
+                else
+                    ImGui::TextWrapped("%s", selectedCell.c_str());
+            }
+            ImGui::EndChild();
+        }        
+    }
+    ImGui::End();
+}
+
+// -----------------------------------------------------------------------
+// ----------------------- HELPER METHODS --------------------------------
+// -----------------------------------------------------------------------
+
+void ImGUIManager::SetupLogsTableColumn(int colIndex, int colTextColor, int i, std::string& cellContents, std::string& selectedCell)
+{
+        ImGui::TableSetColumnIndex(colIndex);
+        if (ImGui::Selectable(("##cell_" + std::to_string(colIndex) + std::to_string(i)).c_str(), false))
+            selectedCell = cellContents;
+        ImGui::SameLine();
+        if (colTextColor == 2)  // Different color
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(150 / 255.0f, 150 / 255.0f, 155 / 255.0f, 1.0f));
+        ImGui::TextUnformatted(cellContents.c_str());
+        if (colTextColor == 2)
+            ImGui::PopStyleColor();    
 }

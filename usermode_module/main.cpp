@@ -6,10 +6,15 @@
 #include "VirusTotalManager.h"
 #include "ProcessManager.h"
 #include "ImGUIManager.h"
-#include "LogsManager.h"
+#include "ServiceControlManager.h"
+#include "ExceptionFilters.h"
+//#include "LogsManager.h"
 
 int main()
 {
+    SetUnhandledExceptionFilter(ExceptionFilters::SimplestCrashHandler);
+
+    
     //Scan all files in the system for blacklisted hash
     {
         /*FileScanner fileScanner;
@@ -49,7 +54,7 @@ int main()
 
     //Scan System32 processes for code signatures
     {
-        /*SystemProcessDefender spd;
+       /* SystemProcessDefender spd;
         std::pair<std::string, std::wstring> exampleSig("48 B8 ? ? ? ? ? ? ? ? FF E0", L"hook_sig1");
         std::vector<std::pair<std::string, std::wstring>> exampleSigsVector;
         exampleSigsVector.push_back(exampleSig);
@@ -72,7 +77,7 @@ int main()
         }*/
     }
 
-    //Scan System32 processes for execution outside of original executable memory ranges
+    //Scan System32 processes for execution outside of original executable memory ranges    // not this!
     {
         /*SystemProcessDefender spd;
 
@@ -95,7 +100,7 @@ int main()
         }*/
     }
 
-    //Scan System32 processes for manually allocated memory that is executable.
+    //Scan System32 processes for manually allocated memory that is executable.     //not this!
     {
         //After testing, this functionality turns out to not be reliable enough for verifying system process integrity
         //and will be replaced for driver-based hook and monitoring of remote allocations (NtAllocateVirtualMemory/NtMapViewOfSection)
@@ -132,7 +137,7 @@ int main()
         }*/
     }
 
-    //VirusTotal analyse file and get result
+    //VirusTotal analyse file and get result        // not this!
     {
         //VirusTotalManager vtmgr = VirusTotalManager(L"c164bc01db151497cc74f370c2b8d4f41d020d79030db9b9db7eca737869e99e"); //VirusTotal API key https://www.virustotal.com/gui/my-apikey
         //VirusTotalManager::FileAnalysisResult result;
@@ -146,7 +151,7 @@ int main()
     //else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
     //    std::wcout << L"file is suspicious\n";
     //else
-    //    std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
+        //std::wcout << L"file analysis didn't detect anything malicious or suspicious\n";
     }
 
     //Virustotal scan all running processes's file's and loaded system modules
@@ -155,10 +160,10 @@ int main()
         //vtmgr.ScanRunningProcessesAndDrivers();
     }
     
-    //Run Imgui example
+    //Run Imgui window
     {
         ImGUIManager imguimgr;
-        imguimgr.example();
+        imguimgr.RunUI();
     }
 
     //Logger test
@@ -167,5 +172,34 @@ int main()
         logsmgr.ReadLogsFromFile();
         logsmgr.Log("Antivirus", "Test");*/
     }
+
+    // Another logger test
+    //{
+    //    SystemProcessDefender spd;
+    //    spd.DiskMemoryIntegrityCheckSystemProcesses();
+    //    //spd.CheckThreadsExecution();
+    //    //spd.FindSuspiciousExecutableAllocations();
+    //    spd.ScanSystemProcessesForSuspiciousMemAllocations();
+    //}
+
+    // Load Driver, send IOCTL, unload driver
+    /*{
+        if (!ServiceControlManager::CreateAndStartDriver())
+        {
+            std::wcout << L"Creating and starting driver failed!" << std::endl; 
+            system("pause");
+        }
+        if (!ServiceControlManager::ExampleIOCTLCall())
+        {
+            std::wcout << L"IOCTL request failed!" << std::endl;
+            system("pause");
+        }
+        if (!ServiceControlManager::StopDriverAndDeleteService())
+        {
+            std::wcout << L"unloading driver failed!" << std::endl;
+            system("pause");
+        }
+        system("pause");
+    }*/
     return 0;
 }

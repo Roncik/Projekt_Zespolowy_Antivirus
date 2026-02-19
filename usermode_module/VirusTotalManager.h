@@ -1,8 +1,8 @@
 #pragma once
-#include "VirusTotalManager.h"
 #include "HTTPSManager.h"
 #include "MD5_HashManager.h"
 #include "ProcessManager.h"
+#include "LogsManager.h"
 
 class VirusTotalManager
 {
@@ -16,6 +16,8 @@ public:
 	};
 
 private:
+	inline static const std::string LogModuleName = "VirusTotal";
+	
 	std::wstring API_KEY;
 	std::wstring hashDatabasePath;
 	std::map<MD5_HashManager::Hash16, FileAnalysisResult> localHashDatabase;
@@ -49,6 +51,6 @@ public:
 
 	bool IsHashInLocalDatabase(MD5_HashManager::Hash16 hash, FileAnalysisResult& fileAnalysisResult);
 
-	bool ScanRunningProcessesAndDrivers();
+	bool ScanRunningProcessesAndDrivers(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex);		// Wrapper used for GUI integration
 };
 

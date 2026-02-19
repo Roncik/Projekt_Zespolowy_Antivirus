@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "FileScanner.h"
 
-void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const std::wstring& startDir, const std::vector<MD5_HashManager::Hash16>& blacklist)
+void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const std::wstring& startDir, const std::vector<MD5_HashManager::Hash16>& blacklist, std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex)
 {
     if (blacklist.empty())
     {
@@ -10,6 +10,7 @@ void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const 
 
     std::vector<std::wstring> stack;
     stack.push_back(startDir);
+    std::unique_lock<std::mutex> lQ_ulock(lQ_mutex, std::defer_lock);   // Added for GUI integration    
 
     while (!stack.empty())
     {
@@ -61,12 +62,22 @@ void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const 
                     std::string pathUtf8(bufSize, '\0');
                     WideCharToMultiByte(CP_UTF8, 0, fullPath.c_str(), -1, &pathUtf8[0], bufSize, nullptr, nullptr);
                     if (!pathUtf8.empty() && pathUtf8.back() == '\0') pathUtf8.pop_back();
-                    std::cout << "Now scanning: " << pathUtf8 << std::endl;
+                    
 
                     if (MD5HashMgr.contains_hash(blacklist, MD5Hash))
                     {
-                        std::cout << "[BLACKLIST MATCH] " << "  ->  " << pathUtf8 << std::endl;
-                        Sleep(3000);
+                        LogsManager::log_entry logentry;
+                        logentry.Type = "Malicious file";
+                        logentry.Module_name = FileScanner::LogModuleName;
+                        logentry.Filename = pathUtf8.substr(pathUtf8.find_last_of('\\'));
+                        logentry.Location = pathUtf8;
+                        logentry.Description = "This file matches a signature from blacklisted signatures database";
+                        
+                        // Added for GUI integration
+                        auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);  // Uses default copy constructor of log_entry to initialize with logentry's field values
+                        lQ_ulock.lock();
+                            logQueue.push_back(std::move(logentryPtr));
+                        lQ_ulock.unlock();
                     }
                 }
                 else
@@ -81,7 +92,7 @@ void FileScanner::ScanDirectoryAndAllSubdirectories_MD5(HCRYPTPROV hProv, const 
     }
 }
 
-void FileScanner::ScanAllDirectories_MD5()
+void FileScanner::ScanAllDirectories_MD5(std::vector<std::unique_ptr<LogsManager::log_entry>>& logQueue, std::mutex& lQ_mutex)
 {
     if (this->MD5HashBlacklist.empty())
     {
@@ -116,7 +127,7 @@ void FileScanner::ScanAllDirectories_MD5()
         {
             try
             {
-                ScanDirectoryAndAllSubdirectories_MD5(hProv, std::wstring(driveRoot), MD5HashBlacklist);
+                ScanDirectoryAndAllSubdirectories_MD5(hProv, std::wstring(driveRoot), MD5HashBlacklist, logQueue, lQ_mutex);
             }
             catch (...)
             {

@@ -1,0 +1,3 @@
+Malware analysis provides a reliable way to identify malware - a code signature
+
+Antivirus scans all running processes for blacklisted code signatures.
