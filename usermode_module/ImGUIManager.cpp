@@ -366,7 +366,25 @@ void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open)
             }
         }
         ImGui::SameLine();
-        ImGui::TextWrapped("ScanSystemProcessesForSuspiciousMemAllocations() - outdated, only for concurrency test");        
+        ImGui::TextWrapped("ScanSystemProcessesForSuspiciousMemAllocations() - outdated, only for concurrency test");     
+
+        ImGui::Separator();
+        if (ImGui::Button("Run##ssptseRunButton"))
+        {
+            if (!ssptseInProgress)
+            {
+                if (workerThreads.at(4).joinable())
+                    workerThreads.at(4).join();
+
+                ssptseInProgress = true;
+                workerThreads.at(4) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
+                    spd.ScanSystemProcessesThreadsSuspiciousExecution(logQueue, lQ_mutex);
+                    ssptseInProgress = false;
+                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped("ScanSystemProcessesThreadsSuspiciousExecution()  - outdated, only for concurrency test");
 
         ImGui::Separator();
         if (ImGui::Button("Run##sad_md5RunButton"))
@@ -422,24 +440,6 @@ void ImGUIManager::ShowActiveProtectionConfigPanel(bool* p_open)
         }
         ImGui::SameLine();
         ImGui::TextWrapped("ScanAllProcessesForBlacklistedSignatures()");
-
-        ImGui::Separator();
-        if (ImGui::Button("Run##ssptseRunButton"))
-        {
-            if (!ssptseInProgress)
-            {
-                if (workerThreads.at(4).joinable())
-                    workerThreads.at(4).join();
-
-                ssptseInProgress = true;
-                workerThreads.at(4) = std::thread([]() {   // lambda automatically has access to static variables (eg. logQueue), no need to pass by reference                   
-                        spd.ScanSystemProcessesThreadsSuspiciousExecution(logQueue, lQ_mutex);
-                        ssptseInProgress = false;
-                    });    // The aim is for threads to be joinable when scanning methods' are modified to perform scans in a loop. Loop stops when stop atomic bool is set to true. The main thread then waits for the threads to complete their current iterations to join, then terminates (eg on quitting the program by the user).
-            }
-        }
-        ImGui::SameLine();
-        ImGui::TextWrapped("ScanSystemProcessesThreadsSuspiciousExecution()");
 
         ImGui::Separator();
         if (ImGui::Button("Run##vt_srpadRunButton"))
