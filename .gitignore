@@ -489,3 +489,6 @@ logs.txt
 
 # Scenarios
 Scenarios/
+
+# ImGui ini
+imgui.ini

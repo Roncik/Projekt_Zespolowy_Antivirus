@@ -312,6 +312,8 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers(std::vector<std::unique_p
             logentry.Type = "Malicious file";
         else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
             logentry.Type = "Suspicious file";
+        else
+            continue;
 
         // Added for GUI integration
         auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);  // Uses default copy constructor of log_entry to initialize with logentry's field values
@@ -359,6 +361,8 @@ bool VirusTotalManager::ScanRunningProcessesAndDrivers(std::vector<std::unique_p
             logentry.Type = "Malicious file";
         else if (result == VirusTotalManager::FileAnalysisResult::SUSPICIOUS)
             logentry.Type = "Suspicious file";
+        else
+            continue;
 
         // Added for GUI integration
         auto logentryPtr = std::make_unique<LogsManager::log_entry>(logentry);  // Uses default copy constructor of log_entry to initialize with logentry's field values
